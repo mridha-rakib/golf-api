@@ -4,7 +4,6 @@ import { EMAIL_CONFIG, EMAIL_ENABLED } from "@/config/email.config";
 import { APP } from "@/constants/app.constants";
 import { env } from "@/env";
 import { logger } from "@/middlewares/pino-logger";
-import * as postmark from "postmark";
 import nodemailer, { type Transporter } from "nodemailer";
 
 type BasicEmailPayload = {
@@ -45,9 +44,8 @@ type ClubCredentialsEmailPayload = {
 };
 
 export class EmailService {
-  private provider: "postmark" | "smtp" | "disabled";
+  private provider: "smtp" | "disabled";
   private transporter?: Transporter;
-  private postmarkClient?: postmark.ServerClient;
   private readonly fromName: string;
   private readonly fromAddress: string;
   private readonly replyTo?: string;
@@ -55,8 +53,6 @@ export class EmailService {
   private readonly brandColor?: string;
   private readonly maxRetries: number;
   private readonly retryDelayMs: number;
-  private readonly messageStream: string;
-  private readonly sandboxMode: boolean;
   private readonly enabled: boolean;
 
   constructor(transporter?: Transporter) {
@@ -69,8 +65,6 @@ export class EmailService {
     this.brandColor = EMAIL_CONFIG.branding.brandColor || undefined;
     this.maxRetries = EMAIL_CONFIG.retry.maxRetries;
     this.retryDelayMs = EMAIL_CONFIG.retry.delayMs;
-    this.messageStream = EMAIL_CONFIG.postmark.messageStream;
-    this.sandboxMode = EMAIL_CONFIG.postmark.sandboxMode;
 
     if (transporter) {
       this.transporter = transporter;
@@ -79,11 +73,7 @@ export class EmailService {
     }
 
     if (this.enabled) {
-      if (this.provider === "postmark") {
-        this.postmarkClient = new postmark.ServerClient(
-          EMAIL_CONFIG.postmark.apiToken
-        );
-      } else if (this.provider === "smtp") {
+      if (this.provider === "smtp") {
         this.transporter = nodemailer.createTransport({
           host: EMAIL_CONFIG.smtp.host,
           port: EMAIL_CONFIG.smtp.port,
@@ -231,10 +221,6 @@ export class EmailService {
 
   private async send(payload: BasicEmailPayload): Promise<void> {
     if (!this.enabled || !this.transporter) {
-      if (this.provider === "postmark" && this.postmarkClient) {
-        return this.sendWithRetry(() => this.sendPostmark(payload), payload);
-      }
-
       logger.warn(
         { to: payload.to, subject: payload.subject },
         "Email delivery skipped (not configured)"
@@ -297,36 +283,6 @@ export class EmailService {
 
   private stripHtml(html: string): string {
     return html.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
-  }
-
-  private async sendPostmark(payload: BasicEmailPayload): Promise<void> {
-    if (!this.postmarkClient) {
-      throw new Error("Postmark client not configured");
-    }
-
-    const from = this.formatFromAddress();
-    if (!from) {
-      throw new Error("Email from address is not configured");
-    }
-
-    const message: postmark.Models.Message = {
-      From: from,
-      To: payload.to,
-      Subject: payload.subject,
-      HtmlBody: payload.html,
-      TextBody: payload.text,
-      MessageStream: this.messageStream,
-    };
-
-    if (this.replyTo) {
-      message.ReplyTo = this.replyTo;
-    }
-
-    if (this.sandboxMode) {
-      message.Tag = "sandbox";
-    }
-
-    await this.postmarkClient.sendEmail(message);
   }
 
   private async sendSmtp(payload: BasicEmailPayload): Promise<void> {

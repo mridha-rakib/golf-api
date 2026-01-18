@@ -1,8 +1,23 @@
 // file: src/config/multer.config.ts
 
+import path from "path";
 import multer from "multer";
+import multerS3 from "multer-s3";
+import { v4 as uuidv4 } from "uuid";
+import { awsS3Bucket, awsS3Client } from "./aws.config";
 
-const storage = multer.memoryStorage();
+const storage = multerS3({
+  s3: awsS3Client,
+  bucket: awsS3Bucket,
+  contentType: multerS3.AUTO_CONTENT_TYPE,
+  metadata: (req, file, cb) => {
+    cb(null, { fieldName: file.fieldname });
+  },
+  key: (req, file, cb) => {
+    const ext = path.extname(file.originalname).toLowerCase();
+    cb(null, `uploads/${uuidv4()}${ext}`);
+  },
+});
 
 // File filter
 const fileFilter = (

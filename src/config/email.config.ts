@@ -2,17 +2,21 @@
 
 import { env } from "@/env";
 
-const postmarkConfigured = Boolean(env.POSTMARK_API_TOKEN);
-const smtpConfigured = Boolean(
-  env.SMTP_HOST && env.SMTP_PORT && env.SMTP_USER && env.SMTP_PASS
-);
+const gmailConfigured = Boolean(env.GMAIL_USER && env.GMAIL_PASS);
 
-const provider = postmarkConfigured
-  ? "postmark"
-  : smtpConfigured
-    ? "smtp"
-    : "disabled";
-const fromAddress = env.EMAIL_FROM_ADDRESS || env.SMTP_FROM || env.SMTP_USER || "";
+const smtpHost = env.SMTP_HOST ?? (gmailConfigured ? "smtp.gmail.com" : undefined);
+const smtpPort =
+  env.SMTP_PORT ?? (env.SMTP_HOST ? undefined : gmailConfigured ? 465 : undefined);
+const smtpSecure =
+  env.SMTP_SECURE ?? (gmailConfigured ? smtpPort === 465 : false);
+const smtpUser = env.SMTP_USER || env.GMAIL_USER || "";
+const smtpPass = env.SMTP_PASS || env.GMAIL_PASS || "";
+
+const smtpConfigured = Boolean(smtpHost && smtpPort && smtpUser && smtpPass);
+
+const provider = smtpConfigured ? "smtp" : "disabled";
+const fromAddress =
+  env.EMAIL_FROM_ADDRESS || env.SMTP_FROM || env.SMTP_USER || env.GMAIL_USER || "";
 
 export const EMAIL_CONFIG = {
   provider,
@@ -29,18 +33,13 @@ export const EMAIL_CONFIG = {
     maxRetries: env.EMAIL_MAX_RETRIES ?? 0,
     delayMs: env.EMAIL_RETRY_DELAY_MS ?? 0,
   },
-  postmark: {
-    apiToken: env.POSTMARK_API_TOKEN || "",
-    messageStream: env.POSTMARK_MESSAGE_STREAM || "outbound",
-    sandboxMode: env.POSTMARK_SANDBOX_MODE ?? false,
-  },
   smtp: {
-    host: env.SMTP_HOST,
-    port: env.SMTP_PORT,
-    secure: env.SMTP_SECURE ?? false,
+    host: smtpHost,
+    port: smtpPort,
+    secure: smtpSecure,
     auth: {
-      user: env.SMTP_USER,
-      pass: env.SMTP_PASS,
+      user: smtpUser,
+      pass: smtpPass,
     },
   },
 } as const;

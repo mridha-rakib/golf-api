@@ -2,16 +2,18 @@
 import { AUTH, OTP } from "@/constants/app.constants";
 import { env } from "@/env";
 import crypto from "crypto";
-import jwt from "jsonwebtoken";
+import jwt, { type SignOptions, type Secret } from "jsonwebtoken";
 import type { JWTPayload } from "../user/user.type";
 
 
 
 export class AuthUtil {
   static generateAccessToken(payload: JWTPayload): string {
-    return jwt.sign(payload, env.JWT_SECRET, {
-      expiresIn: env.JWT_EXPIRY || AUTH.ACCESS_TOKEN_EXPIRY,
-    });
+    const secret: Secret = env.JWT_SECRET;
+    const expiresIn =
+      (env.JWT_EXPIRY || AUTH.ACCESS_TOKEN_EXPIRY) as SignOptions["expiresIn"];
+
+    return jwt.sign(payload, secret, { expiresIn });
   }
 
   /**
@@ -19,9 +21,12 @@ export class AuthUtil {
 Generate Refresh Token
 */
   static generateRefreshToken(userId: string): string {
-    return jwt.sign({ userId }, env.JWT_REFRESH_SECRET, {
-      expiresIn: env.JWT_REFRESH_EXPIRY || AUTH.REFRESH_TOKEN_EXPIRY,
-    });
+    const secret: Secret = env.JWT_REFRESH_SECRET;
+    const expiresIn =
+      (env.JWT_REFRESH_EXPIRY ||
+        AUTH.REFRESH_TOKEN_EXPIRY) as SignOptions["expiresIn"];
+
+    return jwt.sign({ userId }, secret, { expiresIn });
   }
 
   /**

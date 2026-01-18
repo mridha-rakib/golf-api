@@ -1,5 +1,5 @@
 // file: src/app.ts
-import type { Application } from "express";
+import type { Application, NextFunction, Request, Response } from "express";
 
 import cookieParser from "cookie-parser";
 import cors from "cors";
@@ -17,6 +17,8 @@ import { swaggerSpec, swaggerUiOptions } from "./config/swagger.config.js";
 import { env } from "./env.js";
 import { pinoLogger } from "./middlewares/pino-logger.js";
 
+type RawBodyRequest = Request & { rawBody?: string };
+
 const app: Application = express();
 
 app.use(
@@ -26,7 +28,30 @@ app.use(
   })
 );
 
-app.use(express.json());
+app.use(
+  express.json({
+    verify: (req: RawBodyRequest, _res, buf) => {
+      req.rawBody = buf.toString("utf8");
+    },
+  })
+);
+app.use(
+  (
+    error: any,
+    req: RawBodyRequest,
+    _res: Response,
+    next: NextFunction
+  ) => {
+    if (
+      error instanceof SyntaxError &&
+      (req.rawBody?.trim().length ?? 0) === 0
+    ) {
+      req.body = {};
+      return next();
+    }
+    return next(error);
+  }
+);
 app.use(pinoLogger());
 app.use(express.urlencoded({ extended: true }));
 app.use(cookieParser());

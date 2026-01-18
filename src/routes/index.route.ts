@@ -1,5 +1,6 @@
 import authRouter from "@/modules/auth/auth.route";
 import golfClubRouter from "@/modules/golf-club/golf-club.route";
+import socialFeedRouter from "@/modules/social-feed/social-feed.route";
 import userRouter from "@/modules/user/user.route";
 
 import { Router } from "express";
@@ -14,6 +15,10 @@ const moduleRoutes = [
   {
     path: "/golf-clubs",
     route: golfClubRouter,
+  },
+  {
+    path: "/social-feed",
+    route: socialFeedRouter,
   },
   {
     path: "/user",

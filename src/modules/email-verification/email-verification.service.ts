@@ -262,11 +262,13 @@ export class EmailVerificationService {
 
     // Step 7: Send email with new OTP
     const expiresInMinutes = Math.ceil(newOTPGenerated.expiresInSeconds / 60);
+    const userName = request.userName ?? "there";
+    const userType = request.userType ?? existingOTP.userType;
 
     await this.emailService.resendEmailVerification({
       to: request.email,
-      userName: request.userName,
-      userType: request.userType,
+      userName,
+      userType,
       verificationCode: String(newOTPGenerated.code),
       expiresIn: String(expiresInMinutes),
     });

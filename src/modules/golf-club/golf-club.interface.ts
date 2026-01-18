@@ -11,8 +11,8 @@ export interface IGolfClub extends Document {
 
 export interface IGolfClubMember extends Document {
   _id: Types.ObjectId;
-  clubId: Types.ObjectId;
-  golferUserId: Types.ObjectId;
+  clubId: Types.ObjectId | string;
+  golferUserId: Types.ObjectId | string;
   createdAt: Date;
   updatedAt: Date;
 }
