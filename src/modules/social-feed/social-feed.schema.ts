@@ -13,7 +13,7 @@ const optionalTextSchema = z.preprocess((value) => {
 export const createPostSchema = z.object({
   body: z.object({
     text: textSchema,
-    mediaUrls: z.array(z.string().trim().min(1).max(2048)).min(1),
+    mediaUrls: z.array(z.string().trim().min(1).max(2048)).optional().default([]),
   }),
 });
 

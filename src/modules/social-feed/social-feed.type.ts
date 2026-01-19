@@ -2,7 +2,7 @@ import type { UserResponse } from "@/modules/user/user.type";
 
 export type CreatePostPayload = {
   text: string;
-  mediaUrls: string[];
+  mediaUrls?: string[];
 };
 
 export type SharePostPayload = {

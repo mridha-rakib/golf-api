@@ -25,28 +25,24 @@ export class SocialPostService {
 
   async createPost(
     golferUserId: string,
-    payload: CreatePostPayload
+    payload: CreatePostPayload,
   ): Promise<SocialPostResponse> {
     await this.accessService.getGolferOrFail(golferUserId);
 
     const text = payload.text.trim();
-    const mediaUrls = payload.mediaUrls
-      .map((url) => url.trim())
+    const mediaUrls = payload?.mediaUrls
+      ?.map((url) => url.trim())
       .filter((url) => url.length > 0);
 
     if (!text) {
       throw new BadRequestException("Post text is required.");
     }
 
-    if (mediaUrls.length === 0) {
-      throw new BadRequestException("At least one media URL is required.");
-    }
-
     const post = await this.postRepository.create({
       golferUserId,
       text,
       mediaUrls,
-      mediaUrl: mediaUrls[0] ?? null,
+      mediaUrl: mediaUrls?.[0] ?? null,
       viewCount: 0,
       sharedFromPostId: null,
     });
@@ -57,18 +53,18 @@ export class SocialPostService {
   async sharePost(
     golferUserId: string,
     postId: string,
-    payload: SharePostPayload
+    payload: SharePostPayload,
   ): Promise<SharePostResult> {
     const originalPost = await this.accessService.getAccessiblePost(
       golferUserId,
-      postId
+      postId,
     );
 
     const shareText = payload.text?.trim() ?? "";
     const hasText = payload.text !== undefined;
     const existingShare = await this.postRepository.findShareByGolferAndPost(
       golferUserId,
-      originalPost._id.toString()
+      originalPost._id.toString(),
     );
 
     if (existingShare) {
@@ -111,31 +107,31 @@ export class SocialPostService {
 
   async getPostById(
     viewerUserId: string,
-    postId: string
+    postId: string,
   ): Promise<SocialPostResponse> {
     const post = await this.accessService.getAccessiblePost(
       viewerUserId,
-      postId
+      postId,
     );
     return this.toPostResponse(post, viewerUserId);
   }
 
   async listPostsByGolfer(
     viewerUserId: string,
-    golferUserId: string
+    golferUserId: string,
   ): Promise<SocialPostResponse[]> {
     await this.accessService.assertCanViewGolfer(viewerUserId, golferUserId);
     const posts = await this.postRepository.findByGolferUserId(golferUserId);
 
     return Promise.all(
-      posts.map((post) => this.toPostResponse(post, viewerUserId))
+      posts.map((post) => this.toPostResponse(post, viewerUserId)),
     );
   }
 
   async listFeedPosts(
     viewerUserId: string,
     page: number,
-    limit: number
+    limit: number,
   ): Promise<{ posts: SocialPostResponse[]; total: number }> {
     const [posts, total] = await Promise.all([
       this.postRepository.findFeedPosts([], page, limit),
@@ -143,7 +139,7 @@ export class SocialPostService {
     ]);
 
     const responses = await Promise.all(
-      posts.map((post) => this.toPostResponse(post, viewerUserId))
+      posts.map((post) => this.toPostResponse(post, viewerUserId)),
     );
 
     return { posts: responses, total };
@@ -151,20 +147,20 @@ export class SocialPostService {
 
   async listMediaByGolfer(
     viewerUserId: string,
-    golferUserId: string
+    golferUserId: string,
   ): Promise<SocialPostResponse[]> {
     await this.accessService.assertCanViewGolfer(viewerUserId, golferUserId);
     const posts =
       await this.postRepository.findMediaByGolferUserId(golferUserId);
 
     return Promise.all(
-      posts.map((post) => this.toPostResponse(post, viewerUserId))
+      posts.map((post) => this.toPostResponse(post, viewerUserId)),
     );
   }
 
   async incrementViewCount(
     viewerUserId: string,
-    postId: string
+    postId: string,
   ): Promise<ViewCountResponse> {
     await this.accessService.getAccessiblePost(viewerUserId, postId);
 
@@ -181,7 +177,7 @@ export class SocialPostService {
 
   async toPostResponse(
     post: ISocialPost,
-    viewerUserId: string
+    viewerUserId: string,
   ): Promise<SocialPostResponse> {
     const summary = await this.toPostSummary(post);
     const sharedFromPostId = post.sharedFromPostId?.toString() ?? null;
@@ -195,7 +191,7 @@ export class SocialPostService {
     }
 
     const sharedFromPost = await this.postRepository.findById(
-      post.sharedFromPostId.toString()
+      post.sharedFromPostId.toString(),
     );
 
     if (!sharedFromPost) {
@@ -207,7 +203,7 @@ export class SocialPostService {
     }
 
     const canViewShared = await this.accessService.canViewGolferPublic(
-      sharedFromPost.golferUserId.toString()
+      sharedFromPost.golferUserId.toString(),
     );
 
     return {
@@ -226,7 +222,7 @@ export class SocialPostService {
         ? [post.mediaUrl]
         : [];
     const shareCount = await this.postRepository.countSharesByPostId(
-      post._id.toString()
+      post._id.toString(),
     );
 
     return {
