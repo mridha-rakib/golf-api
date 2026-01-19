@@ -1,3 +1,4 @@
+import { UserService } from "@/modules/user/user.service";
 import {
   BadRequestException,
   NotFoundException,
@@ -9,6 +10,7 @@ import type {
   CreatePostPayload,
   SharePostPayload,
   SharePostResult,
+  SocialFeedPostResponse,
   SocialPostResponse,
   SocialPostSummary,
   ViewCountResponse,
@@ -17,10 +19,12 @@ import type {
 export class SocialPostService {
   private accessService: SocialAccessService;
   private postRepository: SocialPostRepository;
+  private userService: UserService;
 
   constructor(accessService: SocialAccessService) {
     this.accessService = accessService;
     this.postRepository = new SocialPostRepository();
+    this.userService = new UserService();
   }
 
   async createPost(
@@ -30,8 +34,8 @@ export class SocialPostService {
     await this.accessService.getGolferOrFail(golferUserId);
 
     const text = payload.text.trim();
-    const mediaUrls = payload?.mediaUrls
-      ?.map((url) => url.trim())
+    const mediaUrls = (payload.mediaUrls ?? [])
+      .map((url) => url.trim())
       .filter((url) => url.length > 0);
 
     if (!text) {
@@ -42,7 +46,7 @@ export class SocialPostService {
       golferUserId,
       text,
       mediaUrls,
-      mediaUrl: mediaUrls?.[0] ?? null,
+      mediaUrl: mediaUrls[0] ?? null,
       viewCount: 0,
       sharedFromPostId: null,
     });
@@ -132,15 +136,62 @@ export class SocialPostService {
     viewerUserId: string,
     page: number,
     limit: number,
-  ): Promise<{ posts: SocialPostResponse[]; total: number }> {
+  ): Promise<{ posts: SocialFeedPostResponse[]; total: number }> {
     const [posts, total] = await Promise.all([
       this.postRepository.findFeedPosts([], page, limit),
       this.postRepository.countFeedPosts([]),
     ]);
 
-    const responses = await Promise.all(
+    const baseResponses = await Promise.all(
       posts.map((post) => this.toPostResponse(post, viewerUserId)),
     );
+    const golferIds = new Set<string>();
+
+    baseResponses.forEach((response) => {
+      golferIds.add(response.golferUserId);
+      if (response.sharedFromPost) {
+        golferIds.add(response.sharedFromPost.golferUserId);
+      }
+    });
+    const golferProfiles = await Promise.all(
+      Array.from(golferIds).map(async (golferUserId) => ({
+        golferUserId,
+        profile: await this.userService.getProfile(golferUserId),
+      })),
+    );
+    const golferMap = new Map(
+      golferProfiles.map((entry) => [entry.golferUserId, entry.profile]),
+    );
+    const responses = baseResponses.map((response) => {
+      const golfer = golferMap.get(response.golferUserId);
+
+      if (!golfer) {
+        throw new NotFoundException("Golfer not found.");
+      }
+
+      const sharedFromPost: SocialFeedPostResponse["sharedFromPost"] =
+        response.sharedFromPost
+          ? (() => {
+              const sharedFromGolfer = golferMap.get(
+                response.sharedFromPost.golferUserId,
+              );
+              if (!sharedFromGolfer) {
+                throw new NotFoundException("Golfer not found.");
+              }
+
+              return {
+                ...response.sharedFromPost,
+                golfer: sharedFromGolfer,
+              };
+            })()
+          : response.sharedFromPost;
+
+      return {
+        ...response,
+        golfer,
+        sharedFromPost,
+      };
+    });
 
     return { posts: responses, total };
   }

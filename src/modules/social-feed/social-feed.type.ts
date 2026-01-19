@@ -46,6 +46,11 @@ export type SocialPostResponse = SocialPostSummary & {
   sharedFromPost?: SocialPostSummary | null;
 };
 
+export type SocialFeedPostResponse = SocialPostResponse & {
+  golfer: UserResponse;
+  sharedFromPost?: (SocialPostSummary & { golfer: UserResponse }) | null;
+};
+
 export type SocialCommentResponse = {
   _id: string;
   postId: string;
