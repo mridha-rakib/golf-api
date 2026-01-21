@@ -62,8 +62,26 @@ export type SocialCommentResponse = {
   replies: SocialCommentResponse[];
 };
 
+export type CommentGolferSummary = {
+  _id: string;
+  fullName?: string;
+  profileImage?: string;
+};
+
+export type SocialFeedCommentResponse = SocialCommentResponse & {
+  commenter: CommentGolferSummary | null;
+  golfer?: CommentGolferSummary | null;
+  replies: SocialFeedCommentResponse[];
+};
+
+export type SocialFeedItemResponse = SocialFeedPostResponse & {
+  comments: SocialFeedCommentResponse[];
+  reactCount: number;
+  commentCount: number;
+};
+
 export type SocialPostDetailsResponse = SocialPostResponse & {
-  comments: SocialCommentResponse[];
+  comments: SocialFeedCommentResponse[];
   reacted: boolean;
   reactionCount: number;
 };

@@ -4,6 +4,7 @@ import { PaginationHelper } from "@/utils/pagination-helper";
 import { ApiResponse } from "@/utils/response.utils";
 import { zParse } from "@/utils/validators.utils";
 import type { Request, Response } from "express";
+import { UserService } from "../user/user.service";
 import { SocialCommentService } from "./social-comment.service";
 import { SocialAccessService } from "./social-feed.access.service";
 import {
@@ -17,7 +18,12 @@ import {
   sharePostSchema,
   toggleReactionSchema,
 } from "./social-feed.schema";
-import type { SocialPostDetailsResponse } from "./social-feed.type";
+import type {
+  SocialCommentResponse,
+  SocialFeedCommentResponse,
+  SocialFeedItemResponse,
+  SocialPostDetailsResponse,
+} from "./social-feed.type";
 import { SocialFollowService } from "./social-follow.service";
 import { SocialPostService } from "./social-post.service";
 import { SocialProfileService } from "./social-profile.service";
@@ -30,6 +36,7 @@ export class SocialFeedController {
   private reactionService: SocialReactionService;
   private commentService: SocialCommentService;
   private profileService: SocialProfileService;
+  private userService: UserService;
 
   constructor() {
     this.accessService = new SocialAccessService();
@@ -39,8 +46,9 @@ export class SocialFeedController {
     this.commentService = new SocialCommentService(this.accessService);
     this.profileService = new SocialProfileService(
       this.accessService,
-      this.postService
+      this.postService,
     );
+    this.userService = new UserService();
   }
 
   toggleFollow = asyncHandler(async (req: Request, res: Response) => {
@@ -52,7 +60,7 @@ export class SocialFeedController {
     const validated = await zParse(followGolferSchema, req);
     const result = await this.followService.toggleFollow(
       userId,
-      validated.params.golferUserId
+      validated.params.golferUserId,
     );
 
     ApiResponse.success(res, result, "Follow status updated successfully");
@@ -97,7 +105,7 @@ export class SocialFeedController {
     const result = await this.postService.sharePost(
       userId,
       validated.params.postId,
-      validated.body
+      validated.body,
     );
 
     if (result.action === "shared") {
@@ -116,7 +124,7 @@ export class SocialFeedController {
     const validated = await zParse(toggleReactionSchema, req);
     const result = await this.reactionService.toggleLoveReaction(
       userId,
-      validated.params.postId
+      validated.params.postId,
     );
 
     ApiResponse.success(res, result, "Reaction updated successfully");
@@ -131,7 +139,7 @@ export class SocialFeedController {
     const validated = await zParse(incrementViewSchema, req);
     const result = await this.postService.incrementViewCount(
       userId,
-      validated.params.postId
+      validated.params.postId,
     );
 
     ApiResponse.success(res, result, "View count updated successfully");
@@ -147,7 +155,7 @@ export class SocialFeedController {
     const result = await this.commentService.addComment(
       userId,
       validated.params.postId,
-      validated.body
+      validated.body,
     );
 
     ApiResponse.created(res, result, "Comment added successfully");
@@ -163,7 +171,7 @@ export class SocialFeedController {
     const result = await this.commentService.replyToComment(
       userId,
       validated.params.commentId,
-      validated.body
+      validated.body,
     );
 
     ApiResponse.created(res, result, "Reply added successfully");
@@ -178,7 +186,7 @@ export class SocialFeedController {
     const validated = await zParse(profileSchema, req);
     const result = await this.profileService.getGolferProfile(
       userId,
-      validated.params.golferUserId
+      validated.params.golferUserId,
     );
 
     ApiResponse.success(res, result, "Profile fetched successfully");
@@ -210,22 +218,98 @@ export class SocialFeedController {
       throw new UnauthorizedException("Unauthorized access.");
     }
 
-    const { page = 1, limit = 10 } =
-      PaginationHelper.parsePaginationParams(req.query);
-    const result = await this.postService.listFeedPosts(
-      userId,
-      page,
-      limit
+    const { page = 1, limit = 10 } = PaginationHelper.parsePaginationParams(
+      req.query,
+    );
+    const result = await this.postService.listFeedPosts(userId, page, limit);
+    const feed: SocialFeedItemResponse[] = await Promise.all(
+      result.posts.map(async (post) => {
+        const [comments, reaction] = await Promise.all([
+          this.commentService.getPostComments(userId, post._id),
+          this.reactionService.getReactionState(userId, post._id),
+        ]);
+        const commentsWithGolfer = await this.attachCommenters(comments);
+
+        return {
+          ...post,
+          comments: commentsWithGolfer,
+          reactCount: reaction.reactionCount,
+          commentCount: this.countComments(commentsWithGolfer),
+        };
+      }),
     );
     const response = PaginationHelper.buildResponse(
-      result.posts,
+      feed,
       result.total,
       page,
-      limit
+      limit,
     );
 
-    ApiResponse.paginated(res, response.data, response.pagination, "Feed fetched successfully");
+    ApiResponse.paginated(
+      res,
+      response.data,
+      response.pagination,
+      "Feed fetched successfully",
+    );
   });
+
+  private async attachCommenters(
+    comments: SocialCommentResponse[],
+  ): Promise<SocialFeedCommentResponse[]> {
+    const golferIds = new Set<string>();
+    const collectGolferIds = (items: SocialCommentResponse[]) => {
+      items.forEach((comment) => {
+        golferIds.add(comment.golferUserId);
+        if (comment.replies?.length) {
+          collectGolferIds(comment.replies);
+        }
+      });
+    };
+
+    collectGolferIds(comments);
+
+    const profiles = await Promise.all(
+      Array.from(golferIds).map(async (golferUserId) => {
+        try {
+          const profile = await this.userService.getProfile(golferUserId);
+          return {
+            golferUserId,
+            summary: {
+              _id: profile._id,
+              name: profile.fullName,
+              fullName: profile.fullName,
+              profileImage: profile.profileImage,
+            },
+          };
+        } catch {
+          return { golferUserId, summary: null };
+        }
+      }),
+    );
+    const profileMap = new Map(
+      profiles.map(({ golferUserId, summary }) => [golferUserId, summary]),
+    );
+
+    const mapComment = (
+      comment: SocialCommentResponse,
+    ): SocialFeedCommentResponse => {
+      const replies = comment.replies.map(mapComment);
+      return {
+        ...comment,
+        replies,
+        commenter: profileMap.get(comment.golferUserId) ?? null,
+      };
+    };
+
+    return comments.map(mapComment);
+  }
+
+  private countComments(comments: SocialFeedCommentResponse[]): number {
+    return comments.reduce(
+      (total, comment) => total + 1 + this.countComments(comment.replies),
+      0,
+    );
+  }
 
   listMyMedia = asyncHandler(async (req: Request, res: Response) => {
     const userId = req.user?.userId;
@@ -246,20 +330,21 @@ export class SocialFeedController {
     const validated = await zParse(postDetailsSchema, req);
     const post = await this.postService.getPostById(
       userId,
-      validated.params.postId
+      validated.params.postId,
     );
     const comments = await this.commentService.getPostComments(
       userId,
-      validated.params.postId
+      validated.params.postId,
     );
+    const commentsWithGolfer = await this.attachCommenters(comments);
     const reaction = await this.reactionService.getReactionState(
       userId,
-      validated.params.postId
+      validated.params.postId,
     );
 
     const result: SocialPostDetailsResponse = {
       ...post,
-      comments,
+      comments: commentsWithGolfer,
       reacted: reaction.reacted,
       reactionCount: reaction.reactionCount,
     };
