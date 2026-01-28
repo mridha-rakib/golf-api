@@ -27,7 +27,7 @@ export class GolfClubController {
 
     const result = await this.golfClubService.createGolfClub(
       validated.body,
-      adminEmail
+      adminEmail,
     );
 
     ApiResponse.created(res, result, "Golf club created successfully");

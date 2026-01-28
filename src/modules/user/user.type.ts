@@ -13,6 +13,9 @@ export type UserResponse = {
   emailVerified: boolean;
   lastLoginAt?: Date;
   profileImage?: string;
+  coverImage?: string;
+  followerCount?: number;
+  followingCount?: number;
 
   createdAt: Date;
   updatedAt: Date;

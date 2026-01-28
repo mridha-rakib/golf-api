@@ -12,6 +12,7 @@ import {
   createPostSchema,
   followGolferSchema,
   incrementViewSchema,
+  listGolfersSchema,
   postDetailsSchema,
   profileSchema,
   replyCommentSchema,
@@ -22,9 +23,14 @@ import type {
   SocialCommentResponse,
   SocialFeedCommentResponse,
   SocialFeedItemResponse,
+  SocialPostCommentsGroupWithCommenter,
   SocialPostDetailsResponse,
+  SocialPostMediaGroup,
+  SocialPostResponse,
+  ReactionWithUser,
 } from "./social-feed.type";
 import { SocialFollowService } from "./social-follow.service";
+import { SocialGolferService } from "./social-golfer.service";
 import { SocialPostService } from "./social-post.service";
 import { SocialProfileService } from "./social-profile.service";
 import { SocialReactionService } from "./social-reaction.service";
@@ -32,6 +38,7 @@ import { SocialReactionService } from "./social-reaction.service";
 export class SocialFeedController {
   private accessService: SocialAccessService;
   private followService: SocialFollowService;
+  private golferService: SocialGolferService;
   private postService: SocialPostService;
   private reactionService: SocialReactionService;
   private commentService: SocialCommentService;
@@ -48,6 +55,7 @@ export class SocialFeedController {
       this.accessService,
       this.postService,
     );
+    this.golferService = new SocialGolferService(this.accessService);
     this.userService = new UserService();
   }
 
@@ -66,6 +74,46 @@ export class SocialFeedController {
     ApiResponse.success(res, result, "Follow status updated successfully");
   });
 
+  listGolfers = asyncHandler(async (req: Request, res: Response) => {
+    const userId = req.user?.userId;
+    if (!userId) {
+      throw new UnauthorizedException("Unauthorized access.");
+    }
+
+    const validated = await zParse(listGolfersSchema, req);
+    const result = await this.golferService.listGolfers(
+      userId,
+      validated.query,
+    );
+
+    ApiResponse.paginated(
+      res,
+      result.data,
+      result.pagination,
+      "Golfers fetched successfully",
+    );
+  });
+
+  listFollowingGolfers = asyncHandler(async (req: Request, res: Response) => {
+    const userId = req.user?.userId;
+    if (!userId) {
+      throw new UnauthorizedException("Unauthorized access.");
+    }
+
+    const validated = await zParse(listGolfersSchema, req);
+    const result = await this.golferService.listFollowingGolfers(
+      userId,
+      validated.query,
+    );
+
+    ApiResponse.paginated(
+      res,
+      result.data,
+      result.pagination,
+      "Following golfers fetched successfully",
+    );
+  });
+
   createPost = asyncHandler(async (req: Request, res: Response) => {
     const userId = req.user?.userId;
     if (!userId) {
@@ -77,16 +125,17 @@ export class SocialFeedController {
       .map((file) => file.location)
       .filter((location): location is string => Boolean(location));
 
-    if (uploadedUrls.length > 0) {
-      req.body.mediaUrls = uploadedUrls;
-    } else if (req.body.mediaUrls) {
-      req.body.mediaUrls = Array.isArray(req.body.mediaUrls)
-        ? req.body.mediaUrls
-        : [req.body.mediaUrls];
-    } else if (req.body.mediaUrl) {
-      req.body.mediaUrls = Array.isArray(req.body.mediaUrl)
-        ? req.body.mediaUrl
-        : [req.body.mediaUrl];
+    const mediaUrls = Array.from(
+      new Set([
+        ...uploadedUrls,
+        ...this.normalizeMediaInput(req.body.mediaUrls),
+        ...this.normalizeMediaInput(req.body.mediaUrl),
+        ...this.normalizeMediaInput(req.body.media),
+      ]),
+    );
+
+    if (mediaUrls.length > 0) {
+      req.body.mediaUrls = mediaUrls;
     }
 
     const validated = await zParse(createPostSchema, req);
@@ -209,7 +258,30 @@ export class SocialFeedController {
     }
 
     const posts = await this.postService.listPostsByGolfer(userId, userId);
-    ApiResponse.success(res, posts, "Posts fetched successfully");
+    const reactionsByPostId = await this.reactionService.listReactionsWithUsers(
+      userId,
+      posts.map((p) => p._id),
+    );
+
+    const enriched: SocialFeedItemResponse[] = await Promise.all(
+      posts.map(async (post) => {
+        const [comments, reaction] = await Promise.all([
+          this.commentService.getPostComments(userId, post._id),
+          this.reactionService.getReactionState(userId, post._id),
+        ]);
+        const commentsWithGolfer = await this.attachCommenters(comments);
+
+        return {
+          ...post,
+          comments: commentsWithGolfer,
+          reactCount: reaction.reactionCount,
+          commentCount: this.countComments(commentsWithGolfer),
+          reactions: reactionsByPostId[post._id] ?? [],
+        };
+      }),
+    );
+
+    ApiResponse.success(res, enriched, "Posts fetched successfully");
   });
 
   listFeed = asyncHandler(async (req: Request, res: Response) => {
@@ -222,6 +294,11 @@ export class SocialFeedController {
       req.query,
     );
     const result = await this.postService.listFeedPosts(userId, page, limit);
+    const reactionsByPostId =
+      await this.reactionService.listReactionsWithUsers(
+        userId,
+        result.posts.map((p) => p._id),
+      );
     const feed: SocialFeedItemResponse[] = await Promise.all(
       result.posts.map(async (post) => {
         const [comments, reaction] = await Promise.all([
@@ -235,6 +312,7 @@ export class SocialFeedController {
           comments: commentsWithGolfer,
           reactCount: reaction.reactionCount,
           commentCount: this.countComments(commentsWithGolfer),
+          reactions: reactionsByPostId[post._id] ?? [],
         };
       }),
     );
@@ -311,14 +389,123 @@ export class SocialFeedController {
     );
   }
 
+  private normalizeMediaInput(input: unknown): string[] {
+    const urls: string[] = [];
+
+    const addIfValid = (value: unknown) => {
+      if (typeof value === "string") {
+        const trimmed = value.trim();
+        if (trimmed.length > 0) {
+          urls.push(trimmed);
+        }
+        return;
+      }
+
+      if (
+        value &&
+        typeof value === "object" &&
+        "uri" in value &&
+        typeof (value as any).uri === "string"
+      ) {
+        const uri = (value as any).uri.trim();
+        if (uri.length > 0) {
+          urls.push(uri);
+        }
+      }
+    };
+
+    if (Array.isArray(input)) {
+      input.forEach(addIfValid);
+      return urls;
+    }
+
+    if (typeof input === "string") {
+      const trimmed = input.trim();
+      if (trimmed.startsWith("[") || trimmed.startsWith("{")) {
+        try {
+          const parsed = JSON.parse(trimmed);
+          return this.normalizeMediaInput(parsed);
+        } catch {
+          // ignore parse errors and treat as plain string
+        }
+      }
+      addIfValid(trimmed);
+      return urls;
+    }
+
+    addIfValid(input);
+    return urls;
+  }
+
+  private extractMediaFromPosts(posts: SocialPostResponse[]) {
+    return posts
+      .map<SocialPostMediaGroup>((post) => {
+        const mediaUrls =
+          (post.mediaUrls ?? []).filter(
+            (url) => typeof url === "string" && url.trim().length > 0,
+          ) || [];
+
+        return {
+          postId: post._id,
+          mediaUrls,
+          createdAt: post.createdAt,
+          updatedAt: post.updatedAt,
+        };
+      })
+      .filter((group) => group.mediaUrls.length > 0);
+  }
+
   listMyMedia = asyncHandler(async (req: Request, res: Response) => {
     const userId = req.user?.userId;
     if (!userId) {
       throw new UnauthorizedException("Unauthorized access.");
     }
 
-    const media = await this.postService.listMediaByGolfer(userId, userId);
+    const posts = await this.postService.listMediaByGolfer(userId, userId);
+    const media = this.extractMediaFromPosts(posts);
     ApiResponse.success(res, media, "Media fetched successfully");
+  });
+
+  listGolferMedia = asyncHandler(async (req: Request, res: Response) => {
+    const userId = req.user?.userId;
+    if (!userId) {
+      throw new UnauthorizedException("Unauthorized access.");
+    }
+
+    const validated = await zParse(profileSchema, req);
+    const posts = await this.postService.listMediaByGolfer(
+      userId,
+      validated.params.golferUserId,
+    );
+
+    const media = this.extractMediaFromPosts(posts);
+    ApiResponse.success(res, media, "Media fetched successfully");
+  });
+
+  listMyComments = asyncHandler(async (req: Request, res: Response) => {
+    const userId = req.user?.userId;
+    if (!userId) {
+      throw new UnauthorizedException("Unauthorized access.");
+    }
+
+    const groups = await this.commentService.listCommentsByGolferPosts(
+      userId,
+      userId,
+    );
+
+    const withCommenters: SocialPostCommentsGroupWithCommenter[] =
+      await Promise.all(
+        groups.map(async (group) => ({
+          postId: group.postId,
+          comments: await this.attachCommenters(group.comments),
+        })),
+      );
+
+    ApiResponse.success(
+      res,
+      withCommenters,
+      "Comments for your posts fetched successfully",
+    );
   });
 
   getPostDetails = asyncHandler(async (req: Request, res: Response) => {

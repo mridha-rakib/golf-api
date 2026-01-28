@@ -1,16 +1,18 @@
 import { BadRequestException, NotFoundException } from "@/utils/app-error.utils";
 import type { ISocialPostComment } from "./social-feed.interface";
 import { SocialAccessService } from "./social-feed.access.service";
-import { SocialPostCommentRepository } from "./social-feed.repository";
-import type { CreateCommentPayload, SocialCommentResponse } from "./social-feed.type";
+import { SocialPostCommentRepository, SocialPostRepository } from "./social-feed.repository";
+import type { CreateCommentPayload, SocialCommentResponse, SocialPostCommentsGroup } from "./social-feed.type";
 
 export class SocialCommentService {
   private accessService: SocialAccessService;
   private commentRepository: SocialPostCommentRepository;
+  private postRepository: SocialPostRepository;
 
   constructor(accessService: SocialAccessService) {
     this.accessService = accessService;
     this.commentRepository = new SocialPostCommentRepository();
+    this.postRepository = new SocialPostRepository();
   }
 
   async addComment(
@@ -73,6 +75,35 @@ export class SocialCommentService {
 
     const comments = await this.commentRepository.findByPostId(postId);
     return this.buildCommentTree(comments);
+  }
+
+  async listCommentsByGolferPosts(
+    viewerUserId: string,
+    golferUserId: string
+  ): Promise<SocialPostCommentsGroup[]> {
+    await this.accessService.assertCanViewGolfer(viewerUserId, golferUserId);
+
+    const posts = await this.postRepository.findByGolferUserId(golferUserId);
+    const postIds = posts.map((post) => post._id.toString());
+    if (postIds.length === 0) {
+      return [];
+    }
+
+    const comments = await this.commentRepository.findByPostIds(postIds);
+    const commentsByPost = new Map<string, ISocialPostComment[]>();
+    postIds.forEach((id) => commentsByPost.set(id, []));
+    comments.forEach((comment) => {
+      const postId = comment.postId.toString();
+      const list = commentsByPost.get(postId);
+      if (list) {
+        list.push(comment);
+      }
+    });
+
+    return posts.map((post) => ({
+      postId: post._id.toString(),
+      comments: this.buildCommentTree(commentsByPost.get(post._id.toString()) ?? []),
+    }));
   }
 
   private buildCommentTree(

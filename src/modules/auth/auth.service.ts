@@ -167,7 +167,10 @@ export class AuthService {
     const user = await this.userService.getUserByEmail(email);
 
     if (!user) {
-      return { message: MESSAGES.AUTH.PASSWORD_RESET_OTP_SENT };
+      return {
+        message:
+          "If an account exists, a password reset code will be sent to that email.",
+      };
     }
 
     // Step 2: Generate OTP using password reset service

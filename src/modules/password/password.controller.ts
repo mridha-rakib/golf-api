@@ -42,7 +42,7 @@ export class PasswordResetController {
 
     const result = await this.authService.requestPasswordReset(email);
 
-    ApiResponse.success(res, result, "Password reset OTP sent to your email");
+    ApiResponse.success(res, result, result.message);
   });
 
   // ============================================

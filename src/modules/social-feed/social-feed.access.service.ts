@@ -24,6 +24,7 @@ export class SocialAccessService {
 
   async getGolferOrFail(userId: string) {
     const user = await this.userService.getById(userId);
+
     if (!user) {
       throw new NotFoundException("User not found.");
     }
@@ -37,7 +38,7 @@ export class SocialAccessService {
 
   async canViewGolfer(
     viewerUserId: string,
-    targetUserId: string
+    targetUserId: string,
   ): Promise<boolean> {
     if (viewerUserId === targetUserId) {
       return true;
@@ -61,7 +62,7 @@ export class SocialAccessService {
 
   async assertCanViewGolfer(
     viewerUserId: string,
-    targetUserId: string
+    targetUserId: string,
   ): Promise<void> {
     await this.getGolferOrFail(targetUserId);
 
@@ -76,14 +77,14 @@ export class SocialAccessService {
 
     if (!isFollowing) {
       throw new ForbiddenException(
-        "Follow this golfer to view their profile or posts."
+        "Follow this golfer to view their profile or posts.",
       );
     }
   }
 
   async getAccessiblePost(
     viewerUserId: string,
-    postId: string
+    postId: string,
   ): Promise<ISocialPost> {
     const post = await this.postRepository.findById(postId);
     if (!post) {

@@ -5,7 +5,7 @@ import {
 } from "@/utils/app-error.utils";
 import { SocialAccessService } from "./social-feed.access.service";
 import type { ISocialPost } from "./social-feed.interface";
-import { SocialPostRepository } from "./social-feed.repository";
+import { SocialPostRepository, SocialPostViewRepository } from "./social-feed.repository";
 import type {
   CreatePostPayload,
   SharePostPayload,
@@ -19,11 +19,13 @@ import type {
 export class SocialPostService {
   private accessService: SocialAccessService;
   private postRepository: SocialPostRepository;
+  private postViewRepository: SocialPostViewRepository;
   private userService: UserService;
 
   constructor(accessService: SocialAccessService) {
     this.accessService = accessService;
     this.postRepository = new SocialPostRepository();
+    this.postViewRepository = new SocialPostViewRepository();
     this.userService = new UserService();
   }
 
@@ -123,13 +125,50 @@ export class SocialPostService {
   async listPostsByGolfer(
     viewerUserId: string,
     golferUserId: string,
-  ): Promise<SocialPostResponse[]> {
+  ): Promise<SocialFeedPostResponse[]> {
     await this.accessService.assertCanViewGolfer(viewerUserId, golferUserId);
     const posts = await this.postRepository.findByGolferUserId(golferUserId);
 
-    return Promise.all(
+    const summaries = await Promise.all(
       posts.map((post) => this.toPostResponse(post, viewerUserId)),
     );
+
+    const profile = await this.userService.getProfile(golferUserId);
+
+    // Preload shared-from golfer profiles to attach
+    const sharedGolferIds = Array.from(
+      new Set(
+        summaries
+          .map((p) => p.sharedFromPost?.golferUserId)
+          .filter((id): id is string => Boolean(id)),
+      ),
+    );
+    const sharedProfiles = await Promise.all(
+      sharedGolferIds.map(async (id) => ({
+        golferUserId: id,
+        profile: await this.userService.getProfileOrNull(id, {
+          includeDeleted: true,
+        }),
+      })),
+    );
+    const sharedMap = new Map(
+      sharedProfiles
+        .filter((entry) => entry.profile)
+        .map((entry) => [entry.golferUserId, entry.profile!]),
+    );
+
+    return summaries.map((summary) => ({
+      ...summary,
+      golfer: profile,
+      sharedFromPost:
+        summary.sharedFromPost &&
+        sharedMap.get(summary.sharedFromPost.golferUserId)
+          ? {
+              ...summary.sharedFromPost,
+              golfer: sharedMap.get(summary.sharedFromPost.golferUserId)!,
+            }
+          : null,
+    }));
   }
 
   async listFeedPosts(
@@ -156,44 +195,48 @@ export class SocialPostService {
     const golferProfiles = await Promise.all(
       Array.from(golferIds).map(async (golferUserId) => ({
         golferUserId,
-        profile: await this.userService.getProfile(golferUserId),
+        profile: await this.userService.getProfileOrNull(golferUserId, {
+          includeDeleted: true,
+        }),
       })),
     );
     const golferMap = new Map(
-      golferProfiles.map((entry) => [entry.golferUserId, entry.profile]),
+      golferProfiles
+        .filter((entry) => entry.profile !== null)
+        .map((entry) => [entry.golferUserId, entry.profile as any]),
     );
-    const responses = baseResponses.map((response) => {
-      const golfer = golferMap.get(response.golferUserId);
+    const responses: SocialFeedPostResponse[] = [];
 
+    for (const response of baseResponses) {
+      const golfer = golferMap.get(response.golferUserId);
       if (!golfer) {
-        throw new NotFoundException("Golfer not found.");
+        continue; // skip posts whose golfer no longer exists
       }
 
-      const sharedFromPost: SocialFeedPostResponse["sharedFromPost"] =
-        response.sharedFromPost
-          ? (() => {
-              const sharedFromGolfer = golferMap.get(
-                response.sharedFromPost.golferUserId,
-              );
-              if (!sharedFromGolfer) {
-                throw new NotFoundException("Golfer not found.");
-              }
+      let sharedFromPost: SocialFeedPostResponse["sharedFromPost"] = null;
 
-              return {
-                ...response.sharedFromPost,
-                golfer: sharedFromGolfer,
-              };
-            })()
-          : response.sharedFromPost;
+      if (response.sharedFromPost) {
+        const sharedFromGolfer = golferMap.get(
+          response.sharedFromPost.golferUserId,
+        );
+        if (!sharedFromGolfer) {
+          // skip if shared-from golfer missing
+          continue;
+        }
+        sharedFromPost = {
+          ...response.sharedFromPost,
+          golfer: sharedFromGolfer,
+        };
+      }
 
-      return {
+      responses.push({
         ...response,
         golfer,
         sharedFromPost,
-      };
-    });
+      });
+    }
 
-    return { posts: responses, total };
+    return { posts: responses, total: responses.length };
   }
 
   async listMediaByGolfer(
@@ -213,7 +256,47 @@ export class SocialPostService {
     viewerUserId: string,
     postId: string,
   ): Promise<ViewCountResponse> {
-    await this.accessService.getAccessiblePost(viewerUserId, postId);
+    const post = await this.accessService.getAccessiblePost(viewerUserId, postId);
+
+    const viewer = await this.userService.getById(viewerUserId);
+    if (!viewer) {
+      throw new NotFoundException("Viewer not found.");
+    }
+
+    const viewerEmail = (viewer.email ?? "").trim().toLowerCase();
+    if (!viewerEmail) {
+      throw new BadRequestException("Viewer email is required to record views.");
+    }
+
+    const alreadyViewed = await this.postViewRepository.existsByPostAndEmail(
+      post._id.toString(),
+      viewerEmail
+    );
+
+    if (alreadyViewed) {
+      return {
+        postId,
+        viewCount: post.viewCount,
+      };
+    }
+
+    try {
+      await this.postViewRepository.create({
+        postId: post._id,
+        viewerEmail,
+        viewerUserId,
+      } as any);
+    } catch (err: any) {
+      if (err?.code === 11000) {
+        // duplicate key -> already counted for this email
+        const fresh = await this.postRepository.findById(postId);
+        return {
+          postId,
+          viewCount: fresh?.viewCount ?? post.viewCount,
+        };
+      }
+      throw err;
+    }
 
     const updated = await this.postRepository.incrementViewCount(postId);
     if (!updated) {

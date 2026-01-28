@@ -1,5 +1,6 @@
 import authRouter from "@/modules/auth/auth.route";
 import golfClubRouter from "@/modules/golf-club/golf-club.route";
+import chatRouter from "@/modules/chat/chat.route";
 import socialFeedRouter from "@/modules/social-feed/social-feed.route";
 import userRouter from "@/modules/user/user.route";
 
@@ -15,6 +16,10 @@ const moduleRoutes = [
   {
     path: "/golf-clubs",
     route: golfClubRouter,
+  },
+  {
+    path: "/chat",
+    route: chatRouter,
   },
   {
     path: "/social-feed",

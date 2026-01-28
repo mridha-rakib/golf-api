@@ -11,6 +11,7 @@ export interface IUser extends Document {
   role: (typeof ROLES)[keyof typeof ROLES];
   accountStatus: (typeof ACCOUNT_STATUS)[keyof typeof ACCOUNT_STATUS];
   profileImageUrl?: string | null;
+  coverImageUrl?: string | null;
   emailVerified: boolean;
   emailVerificationToken?: string;
   emailVerificationExpiresAt?: Date;

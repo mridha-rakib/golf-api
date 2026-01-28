@@ -3,6 +3,7 @@ import { model, Schema } from "mongoose";
 import type {
   ISocialFollow,
   ISocialPost,
+  ISocialPostView,
   ISocialPostComment,
   ISocialPostReaction,
 } from "./social-feed.interface";
@@ -120,6 +121,33 @@ socialFollowSchema.index(
   { unique: true }
 );
 
+const socialPostViewSchema = BaseSchemaUtil.createSchema<ISocialPostView>({
+  postId: {
+    type: Schema.Types.ObjectId,
+    ref: "SocialPost",
+    required: true,
+    index: true,
+  },
+  viewerEmail: {
+    type: String,
+    required: true,
+    lowercase: true,
+    trim: true,
+    index: true,
+  },
+  viewerUserId: {
+    type: Schema.Types.ObjectId,
+    ref: "User",
+    required: true,
+    index: true,
+  },
+});
+
+socialPostViewSchema.index(
+  { postId: 1, viewerEmail: 1 },
+  { unique: true }
+);
+
 export const SocialPost = model<ISocialPost>("SocialPost", socialPostSchema);
 export const SocialPostReaction = model<ISocialPostReaction>(
   "SocialPostReaction",
@@ -132,4 +160,8 @@ export const SocialPostComment = model<ISocialPostComment>(
 export const SocialFollow = model<ISocialFollow>(
   "SocialFollow",
   socialFollowSchema
+);
+export const SocialPostView = model<ISocialPostView>(
+  "SocialPostView",
+  socialPostViewSchema
 );

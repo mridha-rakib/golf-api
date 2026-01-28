@@ -129,6 +129,16 @@ export class UserRepository extends BaseRepository<IUser> {
     return this.model.findById(userId).select("+password").exec();
   }
 
+  /**
+   * Find user by id including soft-deleted records.
+   */
+  async findByIdIncludingDeleted(userId: string): Promise<IUser | null> {
+    return this.model
+      .findById(userId)
+      .setOptions({ includeDeleted: true })
+      .exec();
+  }
+
   async deleteAllRefreshTokens(userId: string): Promise<number> {
     try {
       const result = await RefreshTokenBlacklist.deleteMany({

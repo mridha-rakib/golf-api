@@ -12,6 +12,15 @@ export interface ISocialPost extends Document {
   updatedAt: Date;
 }
 
+export interface ISocialPostView extends Document {
+  _id: Types.ObjectId;
+  postId: Types.ObjectId | string;
+  viewerEmail: string;
+  viewerUserId: Types.ObjectId | string;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
 export interface ISocialPostReaction extends Document {
   _id: Types.ObjectId;
   postId: Types.ObjectId | string;

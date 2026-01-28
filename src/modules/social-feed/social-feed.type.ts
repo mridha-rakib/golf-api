@@ -78,6 +78,7 @@ export type SocialFeedItemResponse = SocialFeedPostResponse & {
   comments: SocialFeedCommentResponse[];
   reactCount: number;
   commentCount: number;
+  reactions?: ReactionWithUser[];
 };
 
 export type SocialPostDetailsResponse = SocialPostResponse & {
@@ -86,9 +87,33 @@ export type SocialPostDetailsResponse = SocialPostResponse & {
   reactionCount: number;
 };
 
+export type SocialPostCommentsGroup = {
+  postId: string;
+  comments: SocialCommentResponse[];
+};
+
+export type SocialPostCommentsGroupWithCommenter = {
+  postId: string;
+  comments: SocialFeedCommentResponse[];
+};
+
+export type SocialPostMediaGroup = {
+  postId: string;
+  mediaUrls: string[];
+  createdAt: Date;
+  updatedAt: Date;
+};
+
 export type ReactionToggleResponse = {
   reacted: boolean;
   reactionCount: number;
+};
+
+export type ReactionWithUser = {
+  golferUserId: string;
+  reaction: string;
+  createdAt: Date;
+  user: UserResponse | null;
 };
 
 export type ViewCountResponse = {
@@ -99,4 +124,9 @@ export type ViewCountResponse = {
 export type SocialProfileResponse = {
   profile: UserResponse;
   posts: SocialPostResponse[];
+};
+
+export type SocialGolferListItem = {
+  golfer: UserResponse;
+  isFollowing: boolean;
 };

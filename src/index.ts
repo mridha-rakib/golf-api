@@ -4,6 +4,7 @@ import { connectDB } from "@/config/database.config";
 import { env } from "@/env";
 import { logger } from "@/middlewares/pino-logger";
 import { bootstrapApplication } from "./config/bootstrap";
+import { createSocketServer } from "./services/socket.service";
 
 const port = env.PORT;
 const server = app.listen(port, async () => {
@@ -11,6 +12,8 @@ const server = app.listen(port, async () => {
   await bootstrapApplication();
   logger.info(`Listening: http://localhost:${port}`);
 });
+
+createSocketServer(server);
 
 server.on("error", (err) => {
   if ("code" in err && err.code === "EADDRINUSE") {

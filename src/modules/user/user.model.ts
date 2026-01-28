@@ -43,6 +43,12 @@ const userSchema = BaseSchemaUtil.createSchema<IUser>({
         sparse: true,
         index: true,
       },
+      coverImageUrl: {
+        type: String,
+        default: null,
+        sparse: true,
+        index: true,
+      },
 
       emailVerified: {
         type: Boolean,
