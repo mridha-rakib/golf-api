@@ -8,7 +8,7 @@ export class ApiResponse {
     res: Response,
     data: T,
     message: string = "Success",
-    statusCode: number = HTTPSTATUS.OK
+    statusCode: number = HTTPSTATUS.OK,
   ) {
     return res.status(statusCode).json({
       success: true,
@@ -23,7 +23,7 @@ export class ApiResponse {
     data: T[],
     pagination: any,
     message: string = "Success",
-    statusCode: number = HTTPSTATUS.OK
+    statusCode: number = HTTPSTATUS.OK,
   ) {
     return res.status(statusCode).json({
       success: true,
@@ -37,7 +37,7 @@ export class ApiResponse {
   static created<T = any>(
     res: Response,
     data: T,
-    message: string = "Resource created successfully"
+    message: string = "Resource created successfully",
   ) {
     return this.success(res, data, message, HTTPSTATUS.CREATED);
   }

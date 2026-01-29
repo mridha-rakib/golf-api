@@ -14,6 +14,13 @@ router.put(
   "/profile",
   authMiddleware.verifyToken,
   authMiddleware.authorize(ROLES.GOLFER),
+  upload.fields([
+    { name: "profileImage", maxCount: 1 },
+    { name: "coverImage", maxCount: 1 },
+    // Allow alternative field names often used by client
+    { name: "profileImageUrl", maxCount: 1 },
+    { name: "coverImageUrl", maxCount: 1 },
+  ]),
   userController.updateProfile,
 );
 

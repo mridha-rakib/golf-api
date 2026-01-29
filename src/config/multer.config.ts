@@ -1,8 +1,8 @@
 // file: src/config/multer.config.ts
 
-import path from "path";
 import multer from "multer";
 import multerS3 from "multer-s3";
+import path from "path";
 import { v4 as uuidv4 } from "uuid";
 import { awsS3Bucket, awsS3Client } from "./aws.config";
 
@@ -23,7 +23,7 @@ const storage = multerS3({
 const fileFilter = (
   req: Express.Request,
   file: Express.Multer.File,
-  cb: multer.FileFilterCallback
+  cb: multer.FileFilterCallback,
 ) => {
   cb(null, true);
 };

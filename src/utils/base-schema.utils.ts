@@ -17,7 +17,7 @@ Create a standard schema with timestamps and pagination
 export class BaseSchemaUtil {
   static createSchema<T>(
     definition: SchemaDefinition<T>,
-    options: SchemaOptions<T> = {}
+    options: SchemaOptions<T> = {},
   ): Schema<T> {
     // Create schema with ONLY timestamps - no spread operator
     const schema = new Schema<T>(definition, {
@@ -43,7 +43,7 @@ export class BaseSchemaUtil {
   static createIndexedSchema<T>(
     definition: SchemaDefinition<T>,
     indexConfig?: Record<string, any>,
-    options: SchemaOptions<T> = {}
+    options: SchemaOptions<T> = {},
   ): Schema<T> {
     const schema = this.createSchema<T>(definition, options);
 
@@ -102,8 +102,10 @@ export class BaseSchemaUtil {
     } as const;
   }
 
-  static phoneField() {
+  static phoneNumberField() {
     return {
+      // Keep legacy `phoneNumber` while accepting `phoneNumber` alias when saving.
+      phoneNumber: { type: String, sparse: true, trim: true },
       phoneNumber: { type: String, sparse: true, trim: true },
     } as const;
   }

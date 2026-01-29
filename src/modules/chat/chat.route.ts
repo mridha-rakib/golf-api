@@ -1,7 +1,6 @@
 import { ROLES } from "@/constants/app.constants";
 import { asyncHandler } from "@/middlewares/async-handler.middleware";
 import { authMiddleware } from "@/middlewares/auth.middleware";
-import { PaginationHelper } from "@/utils/pagination-helper";
 import { ApiResponse } from "@/utils/response.utils";
 import { zParse } from "@/utils/validators.utils";
 import { Router } from "express";
@@ -26,21 +25,8 @@ router.get(
   "/threads/:threadId/messages",
   asyncHandler(async (req, res) => {
     const userId = req.user!.userId;
-    const { page = 1, limit = 50 } = PaginationHelper.parsePaginationParams(
-      req.query,
-    );
-    const messages = await service.listMessages(
-      userId,
-      req.params.threadId,
-      page,
-      limit,
-    );
-    ApiResponse.paginated(
-      res,
-      messages,
-      { page, limit, total: messages.length },
-      "Messages fetched successfully",
-    );
+    const messages = await service.listMessages(userId, req.params.threadId);
+    ApiResponse.success(res, messages, "Messages fetched successfully");
   }),
 );
 

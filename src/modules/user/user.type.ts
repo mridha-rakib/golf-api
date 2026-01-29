@@ -6,14 +6,18 @@ export type UserResponse = {
   _id: string;
   email: string;
   fullName: string;
-  phone: string;
+  userName?: string;
+  phoneNumber: string;
   address: string;
+  bio?: string;
   role: (typeof ROLES)[keyof typeof ROLES];
   accountStatus: (typeof ACCOUNT_STATUS)[keyof typeof ACCOUNT_STATUS];
   emailVerified: boolean;
   lastLoginAt?: Date;
-  profileImage?: string;
-  coverImage?: string;
+  profileImage?: string | null;
+  coverImage?: string | null;
+  profileImageUrl?: string | null;
+  coverImageUrl?: string | null;
   followerCount?: number;
   followingCount?: number;
 
@@ -25,9 +29,11 @@ export type UserCreatePayload = {
   email: string;
   password?: string;
   fullName: string;
+  userName?: string;
   phoneNumber?: string;
-  phone?: string;
+  phoneNumber?: string;
   address?: string;
+  bio?: string;
   role: (typeof ROLES)[keyof typeof ROLES];
   emailVerified?: boolean;
   accountStatus?: (typeof ACCOUNT_STATUS)[keyof typeof ACCOUNT_STATUS];
@@ -37,8 +43,12 @@ export type UserCreatePayload = {
 export type UpdateUserPayload = {
   fullName?: string;
   phoneNumber?: string;
-  phone?: string;
+  phoneNumber?: string;
   address?: string;
+  bio?: string;
+  userName?: string;
+  profileImageUrl?: string;
+  coverImageUrl?: string;
 };
 
 export type ChangePasswordPayload = {

@@ -1,13 +1,20 @@
 import { MESSAGES } from "@/constants/app.constants";
 import { asyncHandler } from "@/middlewares/async-handler.middleware";
-import { UnauthorizedException } from "@/utils/app-error.utils";
+import {
+  BadRequestException,
+  UnauthorizedException,
+} from "@/utils/app-error.utils";
 import { ApiResponse } from "@/utils/response.utils";
 import { zParse } from "@/utils/validators.utils";
 import type { Request, Response } from "express";
 import {
   addClubMemberSchema,
   assignClubManagerSchema,
+  clubImageParamsSchema,
+  clubRolesParamsSchema,
+  clubRolesSchema,
   createGolfClubSchema,
+  updateGolfClubSchema,
 } from "./golf-club.schema";
 import { GolfClubService } from "./golf-club.service";
 
@@ -38,6 +45,29 @@ export class GolfClubController {
     ApiResponse.success(res, result, "Golfers fetched successfully");
   });
 
+  listGolfClubs = asyncHandler(async (req: Request, res: Response) => {
+    const result = await this.golfClubService.listGolfClubs();
+    ApiResponse.success(res, result, "Golf clubs fetched successfully");
+  });
+
+  getClubRoles = asyncHandler(async (req: Request, res: Response) => {
+    const validated = await zParse(clubRolesParamsSchema, req);
+    const result = await this.golfClubService.getClubRoles(
+      validated.params.clubId
+    );
+    ApiResponse.success(res, result, "Club roles fetched successfully");
+  });
+
+  updateClubRoles = asyncHandler(async (req: Request, res: Response) => {
+    const validated = await zParse(clubRolesSchema, req);
+    const result = await this.golfClubService.updateClubRoles({
+      clubId: validated.params.clubId,
+      managerIds: validated.body.managerIds,
+      memberIds: validated.body.memberIds,
+    });
+    ApiResponse.success(res, result, "Club roles updated successfully");
+  });
+
   assignManager = asyncHandler(async (req: Request, res: Response) => {
     const validated = await zParse(assignClubManagerSchema, req);
     const result = await this.golfClubService.assignManager({
@@ -56,5 +86,42 @@ export class GolfClubController {
     });
 
     ApiResponse.created(res, result, "Club member added successfully");
+  });
+
+  updateClub = asyncHandler(async (req: Request, res: Response) => {
+    const validated = await zParse(updateGolfClubSchema, req);
+    const result = await this.golfClubService.updateClubDetails(
+      validated.params.clubId,
+      validated.body
+    );
+    ApiResponse.success(res, result, "Club profile updated successfully");
+  });
+
+  uploadProfileImage = asyncHandler(async (req: Request, res: Response) => {
+    const validated = await zParse(clubImageParamsSchema, req);
+    const file = req.file as Express.MulterS3.File | undefined;
+    const imageUrl = file?.location || (file as any)?.path;
+    if (!imageUrl) {
+      throw new BadRequestException("Profile image file is required.");
+    }
+    const result = await this.golfClubService.updateProfileImage(
+      validated.params.clubId,
+      imageUrl
+    );
+    ApiResponse.success(res, result, "Club profile image updated successfully");
+  });
+
+  uploadCoverImage = asyncHandler(async (req: Request, res: Response) => {
+    const validated = await zParse(clubImageParamsSchema, req);
+    const file = req.file as Express.MulterS3.File | undefined;
+    const imageUrl = file?.location || (file as any)?.path;
+    if (!imageUrl) {
+      throw new BadRequestException("Cover image file is required.");
+    }
+    const result = await this.golfClubService.updateCoverImage(
+      validated.params.clubId,
+      imageUrl
+    );
+    ApiResponse.success(res, result, "Club cover image updated successfully");
   });
 }

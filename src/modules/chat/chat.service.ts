@@ -293,8 +293,6 @@ export class ChatService {
   async listMessages(
     userId: string,
     threadId: string,
-    page = 1,
-    limit = 50,
   ): Promise<ChatMessageResponse[]> {
     const thread = await this.threadRepo.findById(threadId);
     if (!thread) {
@@ -304,7 +302,7 @@ export class ChatService {
       throw new ForbiddenException("You are not part of this conversation.");
     }
 
-    const messages = await this.messageRepo.findByThread(threadId, page, limit);
+    const messages = await this.messageRepo.findByThread(threadId);
     return Promise.all(messages.map((m) => this.toMessageResponse(m)));
   }
 

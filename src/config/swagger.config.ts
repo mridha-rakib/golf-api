@@ -100,7 +100,7 @@ const swaggerDefinition: swaggerJsdoc.OAS3Definition = {
           _id: { type: "string", example: "665fe91a3f6b4a2b6c3a1234" },
           email: { type: "string", format: "email" },
           fullName: { type: "string" },
-          phone: { type: "string" },
+          phoneNumber: { type: "string" },
           address: { type: "string" },
           role: {
             type: "string",
@@ -128,7 +128,7 @@ const swaggerDefinition: swaggerJsdoc.OAS3Definition = {
           firstName: { type: "string" },
           lastName: { type: "string" },
           email: { type: "string" },
-          phoneNumber: { type: "string" },
+          pho: { type: "string" },
           companyName: { type: "string", nullable: true },
           businessAddress: { type: "string", nullable: true },
           serviceDate: { type: "string" },

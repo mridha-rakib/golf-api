@@ -5,6 +5,12 @@ export interface IGolfClub extends Document {
   name: string;
   clubUserId: Types.ObjectId;
   managerUserId?: Types.ObjectId | null;
+  coverImageUrl?: string | null;
+  profileImageUrl?: string | null;
+  country?: string;
+  city?: string;
+  address?: string;
+  ghinNumber?: string;
   createdAt: Date;
   updatedAt: Date;
 }

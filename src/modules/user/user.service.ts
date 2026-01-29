@@ -37,14 +37,18 @@ export class UserService {
       _id: user._id.toString(),
       email: user.email,
       fullName: user.fullName,
-      phone: user.phoneNumber || "",
+      userName: user.userName || user.fullName,
+      phoneNumber: user.phoneNumber || user.phoneNumber || "",
       address: user.address || "",
+      bio: user.bio || "",
       role: user.role,
       accountStatus: user.accountStatus,
       emailVerified: user.emailVerified,
       lastLoginAt: user.lastLoginAt,
-      profileImage: user.profileImageUrl || undefined,
-      coverImage: user.coverImageUrl || undefined,
+      profileImage: user.profileImageUrl ?? null,
+      coverImage: user.coverImageUrl ?? null,
+      profileImageUrl: user.profileImageUrl ?? null,
+      coverImageUrl: user.coverImageUrl ?? null,
       followerCount: extras?.followerCount,
       followingCount: extras?.followingCount,
       createdAt: user.createdAt,
@@ -62,6 +66,15 @@ export class UserService {
       throw new ConflictException(MESSAGES.AUTH.EMAIL_ALREADY_EXISTS);
     }
 
+    if (payload.userName) {
+      const existingUserName = await this.userRepository.findByUserName(
+        payload.userName.trim(),
+      );
+      if (existingUserName) {
+        throw new ConflictException("Username is already taken.");
+      }
+    }
+
     const hashedPassword = payload.password
       ? await hashPassword(payload.password)
       : undefined;
@@ -70,8 +83,11 @@ export class UserService {
       email: payload.email.toLowerCase(),
       password: hashedPassword,
       fullName: payload.fullName,
-      phoneNumber: payload.phoneNumber || payload.phone,
+      userName: payload.userName?.trim(),
+      phoneNumber: payload.phoneNumber || payload.phoneNumber || payload.phone,
+      phoneNumber: payload.phoneNumber || payload.phoneNumber || payload.phone,
       address: payload.address?.trim() ?? "",
+      bio: payload.bio?.trim() ?? "",
       role: payload.role,
       emailVerified: payload.emailVerified ?? false,
       accountStatus: payload.accountStatus ?? ACCOUNT_STATUS.PENDING,
@@ -95,6 +111,17 @@ export class UserService {
     return this.userRepository.findByIdWithPassword(userId);
   }
 
+  async getUsersByIds(userIds: string[]): Promise<IUser[]> {
+    if (userIds.length === 0) {
+      return [];
+    }
+
+    return this.userRepository.find({
+      _id: { $in: userIds },
+      isDeleted: { $ne: true },
+    });
+  }
+
   async updateProfile(
     userId: string,
     payload: UpdateUserPayload,
@@ -110,13 +137,72 @@ export class UserService {
       updates.fullName = payload.fullName.trim();
     }
 
+    if (payload.userName !== undefined) {
+      const desiredUserName = payload.userName.trim();
+      if (desiredUserName) {
+        const existing =
+          await this.userRepository.findByUserName(desiredUserName);
+        if (existing && existing._id.toString() !== userId) {
+          throw new ConflictException("Username is already taken.");
+        }
+        updates.userName = desiredUserName;
+      } else {
+        updates.userName = undefined;
+      }
+    }
+
     if (payload.address !== undefined) {
       updates.address = payload.address.trim();
     }
 
-    const phone = payload.phoneNumber ?? payload.phone;
-    if (phone !== undefined) {
-      updates.phoneNumber = phone;
+    const phoneNumber =
+      payload.phoneNumber ?? payload.phone ?? payload.phoneNumber;
+    if (phoneNumber !== undefined) {
+      const normalizedPhone =
+        typeof phoneNumber === "string" ? phoneNumber.trim() : phoneNumber;
+      updates.phoneNumber = normalizedPhone;
+      updates.phoneNumber = normalizedPhone;
+    }
+
+    if (payload.phoneNumber !== undefined && phoneNumber === undefined) {
+      const normalizedPhone =
+        typeof payload.phoneNumber === "string"
+          ? payload.phoneNumber.trim()
+          : payload.phoneNumber;
+      updates.phoneNumber = normalizedPhone;
+      updates.phoneNumber = normalizedPhone;
+    }
+
+    if (payload.phone !== undefined && phoneNumber === undefined) {
+      const normalizedPhone =
+        typeof payload.phone === "string"
+          ? payload.phone.trim()
+          : payload.phone;
+      updates.phoneNumber = normalizedPhone;
+      updates.phoneNumber = normalizedPhone;
+    }
+
+    if (
+      payload.phoneNumber === undefined &&
+      payload.phoneNumber === undefined &&
+      payload.phone === undefined
+    ) {
+      // no-op
+    } else if (phoneNumber === undefined) {
+      updates.phoneNumber = undefined;
+      updates.phoneNumber = undefined;
+    }
+
+    if (payload.bio !== undefined) {
+      updates.bio = payload.bio.trim();
+    }
+
+    if (payload.profileImageUrl !== undefined) {
+      updates.profileImageUrl = payload.profileImageUrl;
+    }
+
+    if (payload.coverImageUrl !== undefined) {
+      updates.coverImageUrl = payload.coverImageUrl;
     }
 
     if (Object.keys(updates).length === 0) {
@@ -256,7 +342,7 @@ export class UserService {
 
   async getProfileOrNull(
     userId: string,
-    options: { includeDeleted?: boolean } = {}
+    options: { includeDeleted?: boolean } = {},
   ): Promise<UserResponse | null> {
     const user = options.includeDeleted
       ? await this.userRepository.findByIdIncludingDeleted(userId)

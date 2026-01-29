@@ -9,7 +9,7 @@ const userSchema = BaseSchemaUtil.createSchema<IUser>({
   ...BaseSchemaUtil.mergeDefinitions(
     BaseSchemaUtil.emailField(true),
     BaseSchemaUtil.passwordField(),
-    BaseSchemaUtil.phoneField(),
+    BaseSchemaUtil.phoneNumberField(),
     BaseSchemaUtil.softDeleteFields(),
     {
       fullName: {
@@ -17,6 +17,20 @@ const userSchema = BaseSchemaUtil.createSchema<IUser>({
         required: true,
         trim: true,
         index: true,
+      },
+      userName: {
+        type: String,
+        required: false,
+        trim: true,
+        unique: true,
+        sparse: true,
+        index: true,
+      },
+      bio: {
+        type: String,
+        required: false,
+        trim: true,
+        default: "",
       },
       address: {
         type: String,
@@ -79,7 +93,7 @@ const userSchema = BaseSchemaUtil.createSchema<IUser>({
         type: Boolean,
         default: false,
       },
-    }
+    },
   ),
 });
 
@@ -126,12 +140,12 @@ const refreshTokenBlacklistSchema = new mongoose.Schema(
       default: Date.now,
     },
   },
-  { timestamps: true }
+  { timestamps: true },
 );
 
 export const RefreshTokenBlacklist = mongoose.model(
   "RefreshTokenBlacklist",
-  refreshTokenBlacklistSchema
+  refreshTokenBlacklistSchema,
 );
 
 export const User = model<IUser>("User", userSchema);

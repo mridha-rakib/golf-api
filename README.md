@@ -362,7 +362,7 @@ Content-Type: application/json
     "fullName": "Jane Smith",
     "age": 15,
     "gender": "Female",
-    "phone": "555-1234",
+    "phoneNumber": "555-1234",
     "emergencyContact": "555-5678",
     "email": "parent@example.com",
     "address": "123 Main St"

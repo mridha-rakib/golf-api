@@ -1,7 +1,6 @@
 import { BaseRepository } from "@/modules/base/base.repository";
-import type { ChatThreadType } from "./chat.interface";
-import { ChatMessage, ChatThread } from "./chat.model";
 import type { IChatMessage, IChatThread } from "./chat.interface";
+import { ChatMessage, ChatThread } from "./chat.model";
 
 export class ChatThreadRepository extends BaseRepository<IChatThread> {
   constructor() {
@@ -10,7 +9,7 @@ export class ChatThreadRepository extends BaseRepository<IChatThread> {
 
   async findDirectThreadBetween(
     userA: string,
-    userB: string
+    userB: string,
   ): Promise<IChatThread | null> {
     const directKey = this.buildDirectKey(userA, userB);
     return this.model.findOne({ type: "direct", directKey }).exec();
@@ -23,26 +22,32 @@ export class ChatThreadRepository extends BaseRepository<IChatThread> {
   async findThreadsForUser(userId: string): Promise<IChatThread[]> {
     return this.model
       .find({ memberUserIds: userId })
-      .sort({ updatedAt: -1 })
+      .sort({ updatedAt: 1 })
       .exec();
   }
 
-  async addMembers(threadId: string, memberIds: string[]): Promise<IChatThread | null> {
+  async addMembers(
+    threadId: string,
+    memberIds: string[],
+  ): Promise<IChatThread | null> {
     return this.model
       .findByIdAndUpdate(
         threadId,
         { $addToSet: { memberUserIds: { $each: memberIds } } },
-        { new: true }
+        { new: true },
       )
       .exec();
   }
 
-  async removeMember(threadId: string, memberId: string): Promise<IChatThread | null> {
+  async removeMember(
+    threadId: string,
+    memberId: string,
+  ): Promise<IChatThread | null> {
     return this.model
       .findByIdAndUpdate(
         threadId,
         { $pull: { memberUserIds: memberId } },
-        { new: true }
+        { new: true },
       )
       .exec();
   }
@@ -60,21 +65,11 @@ export class ChatMessageRepository extends BaseRepository<IChatMessage> {
     super(ChatMessage);
   }
 
-  async findByThread(
-    threadId: string,
-    page = 1,
-    limit = 50
-  ): Promise<IChatMessage[]> {
-    const skip = Math.max(0, (page - 1) * limit);
-    return this.model
-      .find({ threadId })
-      .sort({ createdAt: -1 })
-      .skip(skip)
-      .limit(limit)
-      .exec();
+  async findByThread(threadId: string): Promise<IChatMessage[]> {
+    return this.model.find({ threadId }).sort({ createdAt: 1 }).exec();
   }
 
   async findLastByThread(threadId: string): Promise<IChatMessage | null> {
-    return this.model.findOne({ threadId }).sort({ createdAt: -1 }).exec();
+    return this.model.findOne({ threadId }).sort({ createdAt: 1 }).exec();
   }
 }

@@ -1,19 +1,19 @@
 import { ROLES } from "@/constants/app.constants";
-import type { PaginationQuery, PaginatedResponse } from "@/ts/pagination.types";
-import { PaginationHelper } from "@/utils/pagination-helper";
 import { UserService } from "@/modules/user/user.service";
+import type { PaginatedResponse, PaginationQuery } from "@/ts/pagination.types";
+import { PaginationHelper } from "@/utils/pagination-helper";
+import type { SortOrder } from "mongoose";
 import { SocialAccessService } from "./social-feed.access.service";
 import { SocialFollowRepository } from "./social-feed.repository";
 import type { SocialGolferListItem } from "./social-feed.type";
 import { SocialGolferRepository } from "./social-golfer.repository";
-import type { SortOrder } from "mongoose";
 
 export class SocialGolferService {
   private accessService: SocialAccessService;
   private followRepository: SocialFollowRepository;
   private golferRepository: SocialGolferRepository;
   private userService: UserService;
-  private readonly searchFields = ["fullName", "email", "phoneNumber"];
+  private readonly searchFields = ["fullName", "email", "phoneNumberNumber"];
 
   constructor(accessService: SocialAccessService) {
     this.accessService = accessService;
@@ -28,14 +28,17 @@ export class SocialGolferService {
   ): Promise<PaginatedResponse<SocialGolferListItem>> {
     await this.accessService.getGolferOrFail(viewerUserId);
 
-    const { page = 1, limit = 10, sort = { createdAt: -1 } } =
-      PaginationHelper.parsePaginationParams(query);
+    const {
+      page = 1,
+      limit = 10,
+      sort = { createdAt: -1 },
+    } = PaginationHelper.parsePaginationParams(query);
     const sortOptionRaw =
       typeof sort === "string"
         ? PaginationHelper.parseSortString(sort)
-        : (sort as Record<string, number | "asc" | "desc"> | undefined) ?? {
+        : ((sort as Record<string, number | "asc" | "desc"> | undefined) ?? {
             createdAt: -1,
-          };
+          });
     const sortOption = sortOptionRaw as Record<string, SortOrder>;
 
     const filter = PaginationHelper.createSearchFilter(
@@ -76,19 +79,21 @@ export class SocialGolferService {
   ): Promise<PaginatedResponse<SocialGolferListItem>> {
     await this.accessService.getGolferOrFail(viewerUserId);
 
-    const { page = 1, limit = 10, sort = { createdAt: -1 } } =
-      PaginationHelper.parsePaginationParams(query);
+    const {
+      page = 1,
+      limit = 10,
+      sort = { createdAt: -1 },
+    } = PaginationHelper.parsePaginationParams(query);
     const sortOptionRaw =
       typeof sort === "string"
         ? PaginationHelper.parseSortString(sort)
-        : (sort as Record<string, number | "asc" | "desc"> | undefined) ?? {
+        : ((sort as Record<string, number | "asc" | "desc"> | undefined) ?? {
             createdAt: -1,
-          };
+          });
     const sortOption = sortOptionRaw as Record<string, SortOrder>;
 
-    const followingIds = await this.followRepository.findFollowingIds(
-      viewerUserId,
-    );
+    const followingIds =
+      await this.followRepository.findFollowingIds(viewerUserId);
     if (followingIds.length === 0) {
       return PaginationHelper.buildResponse([], 0, page, limit);
     }

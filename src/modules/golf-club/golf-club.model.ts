@@ -22,6 +22,36 @@ const golfClubSchema = BaseSchemaUtil.createSchema<IGolfClub>({
     default: null,
     index: true,
   },
+  coverImageUrl: {
+    type: String,
+    default: null,
+  },
+  profileImageUrl: {
+    type: String,
+    default: null,
+  },
+  country: {
+    type: String,
+    trim: true,
+    index: true,
+    default: "",
+  },
+  city: {
+    type: String,
+    trim: true,
+    index: true,
+    default: "",
+  },
+  address: {
+    type: String,
+    trim: true,
+    default: "",
+  },
+  ghinNumber: {
+    type: String,
+    trim: true,
+    default: "",
+  },
 });
 
 const golfClubMemberSchema = BaseSchemaUtil.createSchema<IGolfClubMember>({

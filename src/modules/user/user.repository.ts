@@ -27,6 +27,12 @@ export class UserRepository extends BaseRepository<IUser> {
       .exec();
   }
 
+  async findByUserName(userName: string): Promise<IUser | null> {
+    return this.model
+      .findOne({ userName, isDeleted: false })
+      .exec();
+  }
+
   async findByVerificationToken(token: string): Promise<IUser | null> {
     return this.model
       .findOne({

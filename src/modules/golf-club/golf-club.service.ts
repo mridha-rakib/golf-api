@@ -6,24 +6,39 @@ import {
   ConflictException,
   NotFoundException,
 } from "@/utils/app-error.utils";
+import { Types } from "mongoose";
 import { UserService } from "../user/user.service";
 import type { UserResponse } from "../user/user.type";
+import type { IGolfClubRoleAssignment } from "./golf-club-role.interface";
+import { CLUB_ROLES } from "./golf-club-role.model";
+import { logger } from "@/middlewares/pino-logger";
 import type { IGolfClub, IGolfClubMember } from "./golf-club.interface";
 import {
   GolfClubMemberRepository,
   GolfClubRepository,
+  GolfClubRoleRepository,
 } from "./golf-club.repository";
 import type {
   AddClubMemberPayload,
   AssignClubManagerPayload,
+  ClubRole,
+  ClubRoleAssignmentPayload,
+  ClubRolesResponse,
   CreateGolfClubPayload,
   GolfClubMemberResponse,
   GolfClubResponse,
 } from "./golf-club.type";
 
+type ClubRoleEntry = {
+  golferId: string;
+  user: UserResponse;
+  roles: ClubRole[];
+};
+
 export class GolfClubService {
   private golfClubRepository: GolfClubRepository;
   private golfClubMemberRepository: GolfClubMemberRepository;
+  private golfClubRoleRepository: GolfClubRoleRepository;
   private userService: UserService;
   private emailService: EmailService;
   private passwordGeneratorService: PasswordGeneratorService;
@@ -31,6 +46,7 @@ export class GolfClubService {
   constructor() {
     this.golfClubRepository = new GolfClubRepository();
     this.golfClubMemberRepository = new GolfClubMemberRepository();
+    this.golfClubRoleRepository = new GolfClubRoleRepository();
     this.userService = new UserService();
     this.emailService = new EmailService();
     this.passwordGeneratorService = new PasswordGeneratorService();
@@ -38,14 +54,16 @@ export class GolfClubService {
 
   async createGolfClub(
     payload: CreateGolfClubPayload,
-    adminEmail: string
+    adminEmail: string,
   ): Promise<GolfClubResponse> {
     const clubName = payload.clubName.trim();
-    const generatedPassword = this.passwordGeneratorService.generate();
+    const requestedPassword = payload.password?.trim();
+    const passwordToUse =
+      requestedPassword || this.passwordGeneratorService.generate();
 
     const clubUser = await this.userService.createUser({
       email: payload.email,
-      password: generatedPassword,
+      password: passwordToUse,
       fullName: clubName,
       role: ROLES.GOLF_CLUB,
       emailVerified: true,
@@ -65,7 +83,17 @@ export class GolfClubService {
       recipientRole: "Admin",
       clubName,
       clubEmail: clubUser.email,
-      clubPassword: generatedPassword,
+      clubPassword: passwordToUse,
+    });
+
+    // Notify the club directly so they can log in immediately
+    await this.emailService.sendGolfClubCredentials({
+      to: clubUser.email,
+      recipientName: clubName,
+      recipientRole: "Club portal owner",
+      clubName,
+      clubEmail: clubUser.email,
+      clubPassword: passwordToUse,
     });
 
     return this.toGolfClubResponse(club, clubUser.email);
@@ -76,8 +104,231 @@ export class GolfClubService {
     return golfers.map((golfer) => this.userService.toUserResponse(golfer));
   }
 
+  async listGolfClubs(): Promise<GolfClubResponse[]> {
+    const clubs = await this.golfClubRepository.findAll();
+    if (clubs.length === 0) {
+      return [];
+    }
+
+    const clubUserIds = Array.from(
+      new Set(clubs.map((club) => club.clubUserId.toString())),
+    );
+    const clubUsers = await this.userService.getUsersByIds(clubUserIds);
+    const clubUserMap = new Map(
+      clubUsers.map((user) => [user._id.toString(), user.email]),
+    );
+
+    const clubRoleCounts = await this.golfClubRoleRepository.countByClubIds(
+      clubs.map((club) => club._id.toString()),
+    );
+
+    return clubs.map((club) =>
+      this.toGolfClubResponse(
+        club,
+        clubUserMap.get(club.clubUserId.toString()) ?? "",
+        clubRoleCounts.get(club._id.toString()) ?? 0,
+      ),
+    );
+  }
+
+  async getClubRoles(clubId: string): Promise<ClubRolesResponse> {
+    const club = await this.golfClubRepository.findById(clubId);
+    if (!club) {
+      throw new NotFoundException("Golf club not found.");
+    }
+
+    const assignments = await this.golfClubRoleRepository.findByClubId(clubId);
+    if (assignments.length === 0) {
+      return {
+        clubId,
+        managers: [],
+        members: [],
+        assignments: [],
+      };
+    }
+
+    const golferIds = Array.from(
+      new Set(
+        assignments.map((assignment) => assignment.golferUserId.toString()),
+      ),
+    );
+    const golfers = await this.userService.getUsersByIds(golferIds);
+    const golferMap = new Map(
+      golfers.map((golfer) => [golfer._id.toString(), golfer]),
+    );
+
+    const enrichedAssignments = assignments
+      .map((assignment) => {
+        const golfer = golferMap.get(assignment.golferUserId.toString());
+        if (!golfer) {
+          return null;
+        }
+        return {
+          golferId: assignment.golferUserId.toString(),
+          user: this.userService.toUserResponse(golfer),
+          roles: assignment.roles,
+        } as ClubRoleEntry;
+      })
+      .filter((item): item is ClubRoleEntry => Boolean(item));
+
+    const managers = enrichedAssignments.filter((item) =>
+      item.roles.includes(CLUB_ROLES.CLUB_MANAGER),
+    );
+    const members = enrichedAssignments.filter((item) =>
+      item.roles.includes(CLUB_ROLES.CLUB_MEMBER),
+    );
+
+    return {
+      clubId,
+      managers,
+      members,
+      assignments: enrichedAssignments,
+    };
+  }
+
+  async updateClubRoles(
+    payload: ClubRoleAssignmentPayload,
+  ): Promise<ClubRolesResponse> {
+    const club = await this.golfClubRepository.findById(payload.clubId);
+    if (!club) {
+      throw new NotFoundException("Golf club not found.");
+    }
+
+    const managerIds = payload.managerIds ?? [];
+    const memberIds = payload.memberIds ?? [];
+
+    const managerSet = new Set(managerIds);
+    const memberSet = new Set(memberIds);
+    const combinedIds = new Set<string>([...managerSet, ...memberSet]);
+
+    const golferIds = Array.from(combinedIds);
+    const golfers =
+      golferIds.length > 0
+        ? await this.userService.getUsersByIds(golferIds)
+        : [];
+    const golferMap = new Map(
+      golfers.map((golfer) => [golfer._id.toString(), golfer]),
+    );
+
+    const missingGolferId = golferIds.find((id) => !golferMap.has(id));
+    if (missingGolferId) {
+      throw new NotFoundException(MESSAGES.USER.USER_NOT_FOUND);
+    }
+
+    for (const id of golferIds) {
+      const golfer = golferMap.get(id)!;
+      if (golfer.role !== ROLES.GOLFER) {
+        throw new BadRequestException("Selected user is not a golfer.");
+      }
+    }
+
+    await this.golfClubRoleRepository.deleteByClubId(payload.clubId);
+
+    for (const id of golferIds) {
+      const roles: ClubRole[] = [];
+      if (managerSet.has(id)) {
+        roles.push(CLUB_ROLES.CLUB_MANAGER);
+      }
+      if (memberSet.has(id)) {
+        roles.push(CLUB_ROLES.CLUB_MEMBER);
+      }
+      if (roles.length === 0) {
+        continue;
+      }
+      await this.golfClubRoleRepository.create({
+        clubId: new Types.ObjectId(payload.clubId),
+        golferUserId: new Types.ObjectId(id),
+        roles,
+      } as Partial<IGolfClubRoleAssignment>);
+    }
+
+    const primaryManagerId = managerIds[0] ?? null;
+    await this.golfClubRepository.updateById(payload.clubId, {
+      managerUserId: primaryManagerId
+        ? new Types.ObjectId(primaryManagerId)
+        : null,
+    });
+
+    return this.getClubRoles(payload.clubId);
+  }
+
+  async updateClubDetails(
+    clubId: string,
+    payload: {
+      country?: string;
+      city?: string;
+      address?: string;
+      ghinNumber?: string;
+    },
+  ): Promise<GolfClubResponse> {
+    const club = await this.golfClubRepository.findById(clubId);
+    if (!club) {
+      throw new NotFoundException("Golf club not found.");
+    }
+
+    const updates: Partial<IGolfClub> = {};
+    if (payload.country !== undefined) {
+      updates.country = payload.country.trim();
+    }
+    if (payload.city !== undefined) {
+      updates.city = payload.city.trim();
+    }
+    if (payload.address !== undefined) {
+      updates.address = payload.address.trim();
+    }
+    if (payload.ghinNumber !== undefined) {
+      updates.ghinNumber = payload.ghinNumber.trim();
+    }
+
+    const updatedClub = await this.golfClubRepository.updateById(
+      clubId,
+      updates,
+    );
+    if (!updatedClub) {
+      throw new NotFoundException("Golf club not found.");
+    }
+
+    const clubUser = await this.userService.getById(
+      updatedClub.clubUserId.toString(),
+    );
+
+    return this.toGolfClubResponse(updatedClub, clubUser?.email ?? "");
+  }
+
+  async updateProfileImage(
+    clubId: string,
+    imageUrl: string,
+  ): Promise<GolfClubResponse> {
+    const updatedClub = await this.golfClubRepository.updateById(clubId, {
+      profileImageUrl: imageUrl,
+    });
+    if (!updatedClub) {
+      throw new NotFoundException("Golf club not found.");
+    }
+    const clubUser = await this.userService.getById(
+      updatedClub.clubUserId.toString(),
+    );
+    return this.toGolfClubResponse(updatedClub, clubUser?.email ?? "");
+  }
+
+  async updateCoverImage(
+    clubId: string,
+    imageUrl: string,
+  ): Promise<GolfClubResponse> {
+    const updatedClub = await this.golfClubRepository.updateById(clubId, {
+      coverImageUrl: imageUrl,
+    });
+    if (!updatedClub) {
+      throw new NotFoundException("Golf club not found.");
+    }
+    const clubUser = await this.userService.getById(
+      updatedClub.clubUserId.toString(),
+    );
+    return this.toGolfClubResponse(updatedClub, clubUser?.email ?? "");
+  }
+
   async assignManager(
-    payload: AssignClubManagerPayload
+    payload: AssignClubManagerPayload,
   ): Promise<GolfClubResponse> {
     const club = await this.golfClubRepository.findById(payload.clubId);
     if (!club) {
@@ -95,16 +346,14 @@ export class GolfClubService {
 
     const updatedClub = await this.golfClubRepository.updateById(
       payload.clubId,
-      { managerUserId: golfer._id }
+      { managerUserId: golfer._id },
     );
 
     if (!updatedClub) {
       throw new NotFoundException("Golf club not found.");
     }
 
-    const clubUser = await this.userService.getById(
-      club.clubUserId.toString()
-    );
+    const clubUser = await this.userService.getById(club.clubUserId.toString());
     if (!clubUser) {
       throw new NotFoundException("Golf club login not found.");
     }
@@ -112,7 +361,7 @@ export class GolfClubService {
     const generatedPassword = this.passwordGeneratorService.generate();
     await this.userService.updateAutoGeneratedPassword(
       clubUser._id.toString(),
-      generatedPassword
+      generatedPassword,
     );
 
     await this.emailService.sendGolfClubCredentials({
@@ -124,11 +373,20 @@ export class GolfClubService {
       clubPassword: generatedPassword,
     });
 
+    logger.info(
+      {
+        clubId: payload.clubId,
+        golferId: payload.golferUserId,
+        golferEmail: golfer.email,
+      },
+      "Club manager credential email triggered"
+    );
+
     return this.toGolfClubResponse(updatedClub, clubUser.email);
   }
 
   async addMember(
-    payload: AddClubMemberPayload
+    payload: AddClubMemberPayload,
   ): Promise<GolfClubMemberResponse> {
     const club = await this.golfClubRepository.findById(payload.clubId);
     if (!club) {
@@ -147,7 +405,7 @@ export class GolfClubService {
     const existingMember =
       await this.golfClubMemberRepository.findByClubAndGolfer(
         payload.clubId,
-        payload.golferUserId
+        payload.golferUserId,
       );
     if (existingMember) {
       throw new ConflictException("Golfer is already a member of this club.");
@@ -163,7 +421,8 @@ export class GolfClubService {
 
   private toGolfClubResponse(
     club: IGolfClub,
-    clubEmail: string
+    clubEmail: string,
+    memberCount: number = 0,
   ): GolfClubResponse {
     return {
       _id: club._id.toString(),
@@ -171,13 +430,20 @@ export class GolfClubService {
       clubUserId: club.clubUserId.toString(),
       clubEmail,
       managerUserId: club.managerUserId?.toString() ?? null,
+      coverImageUrl: club.coverImageUrl ?? null,
+      profileImageUrl: club.profileImageUrl ?? null,
+      country: club.country || "",
+      city: club.city || "",
+      address: club.address || "",
+      ghinNumber: club.ghinNumber || "",
+      memberCount,
       createdAt: club.createdAt,
       updatedAt: club.updatedAt,
     };
   }
 
   private toGolfClubMemberResponse(
-    member: IGolfClubMember
+    member: IGolfClubMember,
   ): GolfClubMemberResponse {
     return {
       _id: member._id.toString(),
