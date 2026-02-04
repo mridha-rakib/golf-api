@@ -6,7 +6,6 @@ export interface IUser extends Document {
   email: string;
   password?: string;
   phoneNumber?: string;
-  phoneNumber?: string; // alias for compatibility
   address: string;
   fullName: string;
   userName?: string;

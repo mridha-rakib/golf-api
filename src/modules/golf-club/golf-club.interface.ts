@@ -4,7 +4,9 @@ export interface IGolfClub extends Document {
   _id: Types.ObjectId;
   name: string;
   clubUserId: Types.ObjectId;
+  clubPassword: string;
   managerUserId?: Types.ObjectId | null;
+  groupThreadId?: Types.ObjectId | null;
   coverImageUrl?: string | null;
   profileImageUrl?: string | null;
   country?: string;

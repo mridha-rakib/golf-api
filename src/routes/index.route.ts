@@ -1,4 +1,5 @@
 import authRouter from "@/modules/auth/auth.route";
+import golfClubClubRouter from "@/modules/golf-club/golf-club.club.route";
 import golfClubRouter from "@/modules/golf-club/golf-club.route";
 import chatRouter from "@/modules/chat/chat.route";
 import socialFeedRouter from "@/modules/social-feed/social-feed.route";
@@ -12,6 +13,10 @@ const moduleRoutes = [
   {
     path: "/auth",
     route: authRouter,
+  },
+  {
+    path: "/golf-clubs",
+    route: golfClubClubRouter,
   },
   {
     path: "/golf-clubs",

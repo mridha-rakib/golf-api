@@ -13,7 +13,7 @@ export class SocialGolferService {
   private followRepository: SocialFollowRepository;
   private golferRepository: SocialGolferRepository;
   private userService: UserService;
-  private readonly searchFields = ["fullName", "email", "phoneNumberNumber"];
+  private readonly searchFields = ["fullName", "email", "phoneNumber"];
 
   constructor(accessService: SocialAccessService) {
     this.accessService = accessService;

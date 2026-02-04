@@ -17,6 +17,7 @@ import {
   updateGolfClubSchema,
 } from "./golf-club.schema";
 import { GolfClubService } from "./golf-club.service";
+import { logger } from "@/middlewares/pino-logger";
 
 export class GolfClubController {
   private golfClubService: GolfClubService;
@@ -53,8 +54,21 @@ export class GolfClubController {
   getClubRoles = asyncHandler(async (req: Request, res: Response) => {
     const validated = await zParse(clubRolesParamsSchema, req);
     const result = await this.golfClubService.getClubRoles(
-      validated.params.clubId
+      validated.params.clubId,
     );
+    ApiResponse.success(res, result, "Club roles fetched successfully");
+  });
+
+  getMyClubRoles = asyncHandler(async (req: Request, res: Response) => {
+    const clubUserId = req.user?.userId;
+    if (!clubUserId) {
+      throw new UnauthorizedException(MESSAGES.AUTH.UNAUTHORIZED_ACCESS);
+    }
+
+    const result = await this.golfClubService.getClubRolesByClubUserId(
+      clubUserId,
+    );
+
     ApiResponse.success(res, result, "Club roles fetched successfully");
   });
 
@@ -70,9 +84,18 @@ export class GolfClubController {
 
   assignManager = asyncHandler(async (req: Request, res: Response) => {
     const validated = await zParse(assignClubManagerSchema, req);
+    logger.info(
+      {
+        route: "assignManager",
+        clubId: validated.params.clubId,
+        golferUserId: validated.body.golferUserId,
+      },
+      "Assign manager request received"
+    );
     const result = await this.golfClubService.assignManager({
       clubId: validated.params.clubId,
       golferUserId: validated.body.golferUserId,
+      clubPassword: validated.body.clubPassword,
     });
 
     ApiResponse.success(res, result, "Club manager assigned successfully");
@@ -92,7 +115,7 @@ export class GolfClubController {
     const validated = await zParse(updateGolfClubSchema, req);
     const result = await this.golfClubService.updateClubDetails(
       validated.params.clubId,
-      validated.body
+      validated.body,
     );
     ApiResponse.success(res, result, "Club profile updated successfully");
   });
@@ -106,7 +129,7 @@ export class GolfClubController {
     }
     const result = await this.golfClubService.updateProfileImage(
       validated.params.clubId,
-      imageUrl
+      imageUrl,
     );
     ApiResponse.success(res, result, "Club profile image updated successfully");
   });
@@ -120,8 +143,14 @@ export class GolfClubController {
     }
     const result = await this.golfClubService.updateCoverImage(
       validated.params.clubId,
-      imageUrl
+      imageUrl,
     );
     ApiResponse.success(res, result, "Club cover image updated successfully");
+  });
+
+  deleteClub = asyncHandler(async (req: Request, res: Response) => {
+    const validated = await zParse(clubRolesParamsSchema, req);
+    await this.golfClubService.deleteClubHard(validated.params.clubId);
+    ApiResponse.success(res, null, "Golf club deleted successfully");
   });
 }

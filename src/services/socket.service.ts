@@ -1,6 +1,7 @@
 import { logger } from "@/middlewares/pino-logger";
 import { AuthUtil } from "@/modules/auth/auth.utils";
 import { ChatService } from "@/modules/chat/chat.service";
+import type { UserResponse } from "@/modules/user/user.type";
 import { randomUUID } from "crypto";
 import { Server as HttpServer } from "http";
 import { Server, type Socket } from "socket.io";
@@ -25,6 +26,7 @@ type OutgoingMessage = {
   text: string;
   mediaUrls: string[];
   senderId: string;
+  sender?: UserResponse | null;
   sentAt: string;
   tempId?: string;
 };
@@ -123,6 +125,7 @@ export class SocketService {
                   text: message.text ?? "",
                   mediaUrls: mediaUrls,
                   senderId: socket.userId!,
+                  sender: message.sender ?? null,
                   sentAt: message.createdAt.toISOString
                     ? message.createdAt.toISOString()
                     : new Date().toISOString(),

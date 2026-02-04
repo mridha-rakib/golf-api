@@ -40,7 +40,7 @@ type ClubCredentialsEmailPayload = {
   recipientRole: string;
   clubName: string;
   clubEmail: string;
-  clubPassword: string;
+  clubPassword?: string;
 };
 
 export class EmailService {
@@ -140,15 +140,16 @@ export class EmailService {
   ): Promise<void> {
     const subject = `${APP.NAME} golf club credentials`;
     const recipientName = payload.recipientName || "there";
+    const passwordLine = payload.clubPassword
+      ? `Password: <strong>${this.safeText(payload.clubPassword)}</strong>`
+      : `Password: <strong>(use the club password provided by your admin)</strong>`;
     const html = this.wrapTemplate(`
       <p>Hi ${this.safeText(recipientName)},</p>
       <p>${this.safeText(payload.recipientRole)} access has been created for ${this.safeText(
         payload.clubName
       )}.</p>
       <p>Login email: <strong>${this.safeText(payload.clubEmail)}</strong></p>
-      <p>Temporary password: <strong>${this.safeText(
-        payload.clubPassword
-      )}</strong></p>
+      <p>${passwordLine}</p>
       <p>Please keep these credentials secure.</p>
     `);
 

@@ -106,7 +106,6 @@ export class BaseSchemaUtil {
     return {
       // Keep legacy `phoneNumber` while accepting `phoneNumber` alias when saving.
       phoneNumber: { type: String, sparse: true, trim: true },
-      phoneNumber: { type: String, sparse: true, trim: true },
     } as const;
   }
 

@@ -18,26 +18,40 @@ const optionalMediaUpload: RequestHandler = (req, res, next) => {
   return next();
 };
 
-router.use(authMiddleware.verifyToken, authMiddleware.authorize(ROLES.GOLFER));
+router.use(authMiddleware.verifyToken);
+const golferOnly = authMiddleware.authorize(ROLES.GOLFER);
+const golferOrClub = authMiddleware.authorize(ROLES.GOLFER, ROLES.GOLF_CLUB);
 
-router.post("/follow/:golferUserId", controller.toggleFollow);
+router.post("/follow/:golferUserId", golferOnly, controller.toggleFollow);
 router.get("/golfers/following", controller.listFollowingGolfers);
 router.get("/golfers", controller.listGolfers);
 
-router.post("/posts", optionalMediaUpload, controller.createPost);
-router.post("/posts/:postId/share", controller.sharePost);
-router.post("/posts/:postId/react", controller.toggleReaction);
-router.post("/posts/:postId/view", controller.incrementView);
-router.post("/posts/:postId/comments", controller.addComment);
-router.post("/comments/:commentId/replies", controller.replyToComment);
+router.post("/posts", golferOrClub, optionalMediaUpload, controller.createPost);
+router.post("/posts/:postId/share", golferOrClub, controller.sharePost);
+router.post("/posts/:postId/react", golferOrClub, controller.toggleReaction);
+router.post("/posts/:postId/view", golferOrClub, controller.incrementView);
+router.post("/posts/:postId/comments", golferOrClub, controller.addComment);
+router.post(
+  "/comments/:commentId/replies",
+  golferOrClub,
+  controller.replyToComment,
+);
 
-router.get("/profile", controller.getMyProfile);
-router.get("/feed", controller.listFeed);
-router.get("/posts", controller.listMyPosts);
-router.get("/media", controller.listMyMedia);
-router.get("/comments", controller.listMyComments);
-router.get("/golfers/:golferUserId/profile", controller.getGolferProfile);
-router.get("/golfers/:golferUserId/media", controller.listGolferMedia);
-router.get("/posts/:postId", controller.getPostDetails);
+router.get("/profile", golferOrClub, controller.getMyProfile);
+router.get("/feed", golferOrClub, controller.listFeed);
+router.get("/posts", golferOrClub, controller.listMyPosts);
+router.get("/media", golferOrClub, controller.listMyMedia);
+router.get("/comments", golferOrClub, controller.listMyComments);
+router.get(
+  "/golfers/:golferUserId/profile",
+  golferOrClub,
+  controller.getGolferProfile,
+);
+router.get(
+  "/golfers/:golferUserId/media",
+  golferOrClub,
+  controller.listGolferMedia,
+);
+router.get("/posts/:postId", golferOrClub, controller.getPostDetails);
 
 export default router;

@@ -27,6 +27,12 @@ export type ChatMessageResponse = {
   sender?: UserResponse | null;
 };
 
+export type ChatThreadMessagesResponse = {
+  threadId: string;
+  threadName?: string | null;
+  messages: ChatMessageResponse[];
+};
+
 export type SendDirectMessagePayload = {
   toGolferUserId: string;
   type: ChatMessageType;

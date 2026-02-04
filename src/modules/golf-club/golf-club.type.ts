@@ -4,11 +4,14 @@ export type CreateGolfClubPayload = {
   clubName: string;
   email: string;
   password: string;
+  address?: string;
+  managerIds?: string[];
 };
 
 export type AssignClubManagerPayload = {
   clubId: string;
   golferUserId: string;
+  clubPassword?: string;
 };
 
 export type AddClubMemberPayload = {
@@ -47,6 +50,7 @@ export type ClubRoleAssignmentPayload = {
   clubId: string;
   managerIds?: string[];
   memberIds?: string[];
+  clubPassword?: string;
 };
 
 export type ClubRolesResponse = {

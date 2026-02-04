@@ -1,14 +1,23 @@
+import { ROLES } from "@/constants/app.constants";
+import { CLUB_ROLES } from "@/modules/golf-club/golf-club-role.model";
+import {
+  GolfClubMemberRepository,
+  GolfClubRepository,
+  GolfClubRoleRepository,
+} from "@/modules/golf-club/golf-club.repository";
 import {
   BadRequestException,
   ForbiddenException,
   NotFoundException,
 } from "@/utils/app-error.utils";
+import { Types } from "mongoose";
 import { SocialFollowRepository } from "../social-feed/social-feed.repository";
 import { UserService } from "../user/user.service";
 import type { IChatMessage, IChatThread } from "./chat.interface";
 import { ChatMessageRepository, ChatThreadRepository } from "./chat.repository";
 import type {
   ChatMessageResponse,
+  ChatThreadMessagesResponse,
   ChatThreadSummary,
   CreateGroupPayload,
   SendDirectMessagePayload,
@@ -21,12 +30,19 @@ export class ChatService {
   private messageRepo: ChatMessageRepository;
   private followRepo: SocialFollowRepository;
   private userService: UserService;
+  private golfClubRepository: GolfClubRepository;
+  private golfClubRoleRepository: GolfClubRoleRepository;
+  private golfClubMemberRepository: GolfClubMemberRepository;
+  private static groupIndexChecked = false;
 
   constructor() {
     this.threadRepo = new ChatThreadRepository();
     this.messageRepo = new ChatMessageRepository();
     this.followRepo = new SocialFollowRepository();
     this.userService = new UserService();
+    this.golfClubRepository = new GolfClubRepository();
+    this.golfClubRoleRepository = new GolfClubRoleRepository();
+    this.golfClubMemberRepository = new GolfClubMemberRepository();
   }
 
   private async assertCanDm(senderUserId: string, targetUserId: string) {
@@ -64,6 +80,144 @@ export class ChatService {
         throw new BadRequestException("Image message requires imageUrl.");
       }
     }
+  }
+
+  private async resolveClubMembers(clubUserId: string): Promise<{
+    clubName: string;
+    memberUserIds: string[];
+  }> {
+    const club = await this.golfClubRepository.findByClubUserId(clubUserId);
+    if (!club) {
+      throw new NotFoundException("Golf club not found.");
+    }
+
+    const [assignments, clubMembers] = await Promise.all([
+      this.golfClubRoleRepository.findByClubId(club._id.toString()),
+      this.golfClubMemberRepository.find({ clubId: club._id } as any),
+    ]);
+
+    const roleMemberIds = assignments
+      .filter((assignment) =>
+        (assignment.roles ?? []).some(
+          (role) =>
+            role === CLUB_ROLES.CLUB_MANAGER || role === CLUB_ROLES.CLUB_MEMBER,
+        ),
+      )
+      .map((assignment) => assignment.golferUserId.toString());
+
+    const memberIdsFromClub = clubMembers.map((member) =>
+      member.golferUserId.toString(),
+    );
+
+    const managerId = club.managerUserId?.toString();
+
+    const memberUserIds = Array.from(
+      new Set([
+        ...roleMemberIds,
+        ...memberIdsFromClub,
+        ...(managerId ? [managerId] : []),
+      ]),
+    );
+
+    return { clubName: club.name, memberUserIds };
+  }
+
+  private async ensureGroupThreadIndexes() {
+    if (ChatService.groupIndexChecked) {
+      return;
+    }
+
+    ChatService.groupIndexChecked = true;
+    try {
+      await this.threadRepo.dropUniqueTypeIndexIfPresent();
+    } catch {
+      ChatService.groupIndexChecked = false;
+    }
+  }
+
+  private async ensureClubGroupThreadId(clubId: string): Promise<string> {
+    const club = await this.golfClubRepository.findById(clubId);
+    if (!club) {
+      throw new NotFoundException("Golf club not found.");
+    }
+
+    const clubUserId = club.clubUserId.toString();
+    const defaultName = `${club.name} Club`;
+
+    let threadId = club.groupThreadId?.toString() ?? null;
+    if (threadId) {
+      const existing = await this.threadRepo.findById(threadId);
+      if (!existing) {
+        threadId = null;
+      }
+    }
+
+    if (!threadId) {
+      const namedThread = await this.threadRepo.findOne({
+        type: "group",
+        ownerUserId: clubUserId,
+        name: defaultName,
+      });
+      if (namedThread) {
+        threadId = (namedThread._id as any).toString();
+      }
+    }
+
+    if (!threadId) {
+      const anyThread = await this.threadRepo.findOne({
+        type: "group",
+        ownerUserId: clubUserId,
+      });
+      if (anyThread) {
+        threadId = (anyThread._id as any).toString();
+      }
+    }
+
+    if (!threadId) {
+      const created = await this.createClubGroupThread(clubUserId, defaultName);
+      threadId = created._id;
+    }
+
+    if (!club.groupThreadId || club.groupThreadId.toString() !== threadId) {
+      await this.golfClubRepository.updateById(clubId, {
+        groupThreadId: new Types.ObjectId(threadId),
+      } as any);
+    }
+
+    return threadId;
+  }
+
+  async addMembersToClubGroupThreads(
+    clubId: string,
+    memberUserIds: string[],
+  ): Promise<void> {
+    const uniqueMemberIds = Array.from(new Set(memberUserIds)).filter(Boolean);
+    if (uniqueMemberIds.length === 0) {
+      return;
+    }
+    const club = await this.golfClubRepository.findById(clubId);
+    if (!club) {
+      throw new NotFoundException("Golf club not found.");
+    }
+
+    await this.ensureClubGroupThreadId(clubId);
+
+    const threads = await this.threadRepo.findGroupThreadsByOwner(
+      club.clubUserId.toString(),
+    );
+
+    if (threads.length === 0) {
+      return;
+    }
+
+    await Promise.all(
+      threads.map((thread) =>
+        this.threadRepo.addMembers(
+          (thread._id as any).toString(),
+          uniqueMemberIds,
+        ),
+      ),
+    );
   }
 
   async sendDirectMessage(
@@ -204,9 +358,32 @@ export class ChatService {
     ownerUserId: string,
     payload: CreateGroupPayload,
   ): Promise<ChatThreadSummary> {
+    const owner = await this.userService.getById(ownerUserId);
+    if (!owner) {
+      throw new NotFoundException("User not found.");
+    }
+
     const name = payload.name?.trim();
     if (!name) {
       throw new BadRequestException("Group name is required.");
+    }
+
+    await this.ensureGroupThreadIndexes();
+
+    if (owner.role === ROLES.GOLF_CLUB) {
+      const { clubName, memberUserIds } =
+        await this.resolveClubMembers(ownerUserId);
+      const members = Array.from(new Set([ownerUserId, ...memberUserIds]));
+
+      const thread = await this.threadRepo.create({
+        type: "group",
+        name: name || `${clubName} Club`,
+        avatarUrl: payload.avatarUrl,
+        ownerUserId,
+        memberUserIds: members,
+      } as any);
+
+      return this.toThreadSummary(thread, null, ownerUserId);
     }
 
     const requested = Array.from(new Set(payload.memberUserIds ?? []));
@@ -235,6 +412,26 @@ export class ChatService {
     } as any);
 
     return this.toThreadSummary(thread, null, ownerUserId);
+  }
+
+  async createClubGroupThread(
+    clubUserId: string,
+    threadName?: string,
+  ): Promise<ChatThreadSummary> {
+    await this.ensureGroupThreadIndexes();
+    const { clubName, memberUserIds } =
+      await this.resolveClubMembers(clubUserId);
+    const members = Array.from(new Set([clubUserId, ...memberUserIds]));
+    const name = (threadName ?? "").trim() || `${clubName} Club`;
+
+    const thread = await this.threadRepo.create({
+      type: "group",
+      name,
+      ownerUserId: clubUserId,
+      memberUserIds: members,
+    } as any);
+
+    return this.toThreadSummary(thread, null, clubUserId);
   }
 
   async addGroupMembers(
@@ -293,7 +490,7 @@ export class ChatService {
   async listMessages(
     userId: string,
     threadId: string,
-  ): Promise<ChatMessageResponse[]> {
+  ): Promise<ChatThreadMessagesResponse> {
     const thread = await this.threadRepo.findById(threadId);
     if (!thread) {
       throw new NotFoundException("Thread not found.");
@@ -303,7 +500,15 @@ export class ChatService {
     }
 
     const messages = await this.messageRepo.findByThread(threadId);
-    return Promise.all(messages.map((m) => this.toMessageResponse(m)));
+    const mapped = await Promise.all(
+      messages.map((m) => this.toMessageResponse(m)),
+    );
+
+    return {
+      threadId,
+      threadName: thread.name ?? null,
+      messages: mapped,
+    };
   }
 
   private async toThreadSummary(

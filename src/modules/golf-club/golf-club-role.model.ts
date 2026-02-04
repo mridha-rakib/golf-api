@@ -1,6 +1,9 @@
 import { BaseSchemaUtil } from "@/utils/base-schema.utils";
 import { model, Schema } from "mongoose";
-import type { ClubRole, IGolfClubRoleAssignment } from "./golf-club-role.interface";
+import type {
+  ClubRole,
+  IGolfClubRoleAssignment,
+} from "./golf-club-role.interface";
 
 export const CLUB_ROLES: Record<string, ClubRole> = {
   CLUB_MEMBER: "club_member",
@@ -26,14 +29,17 @@ const golfClubRoleAssignmentSchema =
     roles: {
       type: [String],
       enum: CLUB_ROLE_VALUES,
-      required: true,
+      required: false,
       validate: { validator: (val: string[]) => val.length > 0 },
     },
   });
 
-golfClubRoleAssignmentSchema.index({ clubId: 1, golferUserId: 1 }, {
-  unique: true,
-});
+golfClubRoleAssignmentSchema.index(
+  { clubId: 1, golferUserId: 1 },
+  {
+    unique: true,
+  },
+);
 
 export const GolfClubRoleAssignment = model<IGolfClubRoleAssignment>(
   "GolfClubRoleAssignment",

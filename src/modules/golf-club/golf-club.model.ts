@@ -16,9 +16,19 @@ const golfClubSchema = BaseSchemaUtil.createSchema<IGolfClub>({
     unique: true,
     index: true,
   },
+  clubPassword: {
+    type: String,
+    required: true,
+  },
   managerUserId: {
     type: Schema.Types.ObjectId,
     ref: "User",
+    default: null,
+    index: true,
+  },
+  groupThreadId: {
+    type: Schema.Types.ObjectId,
+    ref: "ChatThread",
     default: null,
     index: true,
   },

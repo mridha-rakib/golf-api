@@ -84,8 +84,7 @@ export class UserService {
       password: hashedPassword,
       fullName: payload.fullName,
       userName: payload.userName?.trim(),
-      phoneNumber: payload.phoneNumber || payload.phoneNumber || payload.phone,
-      phoneNumber: payload.phoneNumber || payload.phoneNumber || payload.phone,
+      phoneNumber: payload.phoneNumber ?? undefined,
       address: payload.address?.trim() ?? "",
       bio: payload.bio?.trim() ?? "",
       role: payload.role,
@@ -155,8 +154,7 @@ export class UserService {
       updates.address = payload.address.trim();
     }
 
-    const phoneNumber =
-      payload.phoneNumber ?? payload.phone ?? payload.phoneNumber;
+    const phoneNumber = payload.phoneNumber;
     if (phoneNumber !== undefined) {
       const normalizedPhone =
         typeof phoneNumber === "string" ? phoneNumber.trim() : phoneNumber;
@@ -164,33 +162,12 @@ export class UserService {
       updates.phoneNumber = normalizedPhone;
     }
 
-    if (payload.phoneNumber !== undefined && phoneNumber === undefined) {
+    if (payload.phoneNumber !== undefined) {
       const normalizedPhone =
         typeof payload.phoneNumber === "string"
           ? payload.phoneNumber.trim()
           : payload.phoneNumber;
       updates.phoneNumber = normalizedPhone;
-      updates.phoneNumber = normalizedPhone;
-    }
-
-    if (payload.phone !== undefined && phoneNumber === undefined) {
-      const normalizedPhone =
-        typeof payload.phone === "string"
-          ? payload.phone.trim()
-          : payload.phone;
-      updates.phoneNumber = normalizedPhone;
-      updates.phoneNumber = normalizedPhone;
-    }
-
-    if (
-      payload.phoneNumber === undefined &&
-      payload.phoneNumber === undefined &&
-      payload.phone === undefined
-    ) {
-      // no-op
-    } else if (phoneNumber === undefined) {
-      updates.phoneNumber = undefined;
-      updates.phoneNumber = undefined;
     }
 
     if (payload.bio !== undefined) {
@@ -308,6 +285,10 @@ export class UserService {
 
   async invalidateAllRefreshTokens(userId: string): Promise<void> {
     await this.userRepository.deleteAllRefreshTokens(userId);
+  }
+
+  async permanentlyDeleteUser(userId: string): Promise<void> {
+    await this.userRepository.permanentlyDeleteUser(userId);
   }
 
   async notifyPasswordChange(

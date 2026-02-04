@@ -39,11 +39,7 @@ const chatThreadSchema = new Schema<IChatThread>(
   { timestamps: true }
 );
 
-// ensure member list uniqueness for direct channels through directKey
-chatThreadSchema.index(
-  { type: 1, directKey: 1 },
-  { unique: true, sparse: true }
-);
+// ensure direct threads are unique through directKey (see directKey unique index)
 chatThreadSchema.index({ type: 1, memberUserIds: 1 });
 
 const chatMessageSchema = new Schema<IChatMessage>(

@@ -10,10 +10,13 @@ import { ChatService } from "./chat.service";
 const router = Router();
 const service = new ChatService();
 
-router.use(authMiddleware.verifyToken, authMiddleware.authorize(ROLES.GOLFER));
+router.use(authMiddleware.verifyToken);
+const golferOnly = authMiddleware.authorize(ROLES.GOLFER);
+const golferOrClub = authMiddleware.authorize(ROLES.GOLFER, ROLES.GOLF_CLUB);
 
 router.get(
   "/threads",
+  golferOrClub,
   asyncHandler(async (req, res) => {
     const userId = req.user!.userId;
     const threads = await service.listThreadsForUser(userId);
@@ -23,6 +26,7 @@ router.get(
 
 router.get(
   "/threads/:threadId/messages",
+  golferOrClub,
   asyncHandler(async (req, res) => {
     const userId = req.user!.userId;
     const messages = await service.listMessages(userId, req.params.threadId);
@@ -32,6 +36,7 @@ router.get(
 
 router.post(
   "/threads/direct",
+  golferOnly,
   asyncHandler(async (req, res) => {
     const userId = req.user!.userId;
     const validated = await zParse(createDirectSchema, req);
@@ -45,6 +50,7 @@ router.post(
 
 router.post(
   "/threads/group",
+  golferOrClub,
   asyncHandler(async (req, res) => {
     const userId = req.user!.userId;
     const validated = await zParse(createGroupSchema, req);

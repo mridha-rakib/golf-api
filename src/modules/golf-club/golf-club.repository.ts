@@ -16,6 +16,11 @@ export class GolfClubRepository extends BaseRepository<IGolfClub> {
   async findByClubUserId(clubUserId: string): Promise<IGolfClub | null> {
     return this.model.findOne({ clubUserId }).exec();
   }
+
+  async deleteByIdHard(clubId: string): Promise<number> {
+    const result = await this.model.deleteOne({ _id: clubId }).exec();
+    return result.deletedCount || 0;
+  }
 }
 
 export class GolfClubMemberRepository extends BaseRepository<IGolfClubMember> {
@@ -28,6 +33,11 @@ export class GolfClubMemberRepository extends BaseRepository<IGolfClubMember> {
     golferUserId: string
   ): Promise<IGolfClubMember | null> {
     return this.model.findOne({ clubId, golferUserId }).exec();
+  }
+
+  async deleteByClubId(clubId: string): Promise<number> {
+    const result = await this.model.deleteMany({ clubId }).exec();
+    return result.deletedCount || 0;
   }
 }
 

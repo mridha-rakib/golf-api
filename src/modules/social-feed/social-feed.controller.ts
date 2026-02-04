@@ -3,6 +3,7 @@ import { UnauthorizedException } from "@/utils/app-error.utils";
 import { PaginationHelper } from "@/utils/pagination-helper";
 import { ApiResponse } from "@/utils/response.utils";
 import { zParse } from "@/utils/validators.utils";
+import { ROLES } from "@/constants/app.constants";
 import type { Request, Response } from "express";
 import { UserService } from "../user/user.service";
 import { SocialCommentService } from "./social-comment.service";
@@ -233,10 +234,12 @@ export class SocialFeedController {
     }
 
     const validated = await zParse(profileSchema, req);
-    const result = await this.profileService.getGolferProfile(
-      userId,
-      validated.params.golferUserId,
-    );
+    const targetUserId = validated.params.golferUserId;
+    const viewerRole = req.user?.role;
+    const result =
+      viewerRole === ROLES.GOLF_CLUB
+        ? await this.profileService.getProfileForClub(userId, targetUserId)
+        : await this.profileService.getGolferProfile(userId, targetUserId);
 
     ApiResponse.success(res, result, "Profile fetched successfully");
   });
@@ -372,10 +375,18 @@ export class SocialFeedController {
       comment: SocialCommentResponse,
     ): SocialFeedCommentResponse => {
       const replies = comment.replies.map(mapComment);
+      const rawCommenter = profileMap.get(comment.golferUserId) ?? null;
+      const commenter =
+        rawCommenter === null
+          ? null
+          : {
+              ...rawCommenter,
+              profileImage: rawCommenter.profileImage ?? undefined,
+            };
       return {
         ...comment,
         replies,
-        commenter: profileMap.get(comment.golferUserId) ?? null,
+        commenter,
       };
     };
 

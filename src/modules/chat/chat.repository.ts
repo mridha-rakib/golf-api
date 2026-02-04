@@ -3,6 +3,8 @@ import type { IChatMessage, IChatThread } from "./chat.interface";
 import { ChatMessage, ChatThread } from "./chat.model";
 
 export class ChatThreadRepository extends BaseRepository<IChatThread> {
+  private static typeIndexChecked = false;
+
   constructor() {
     super(ChatThread);
   }
@@ -26,6 +28,48 @@ export class ChatThreadRepository extends BaseRepository<IChatThread> {
       .exec();
   }
 
+  async dropUniqueTypeIndexIfPresent(): Promise<void> {
+    if (ChatThreadRepository.typeIndexChecked) {
+      return;
+    }
+
+    ChatThreadRepository.typeIndexChecked = true;
+
+    try {
+      const indexes = await this.model.collection.indexes();
+      const indexesToDrop = indexes.filter((index) => {
+        if (!index.unique) return false;
+        if (index.name === "_id_") return false;
+        const keys = index.key ?? {};
+        const keyNames = Object.keys(keys);
+
+        if (keyNames.length === 1 && keyNames[0] === "type") {
+          return true;
+        }
+
+        if (keyNames.includes("type") && keyNames.includes("directKey")) {
+          const partial = index.partialFilterExpression as
+            | Record<string, any>
+            | undefined;
+          if (partial && partial.type === "direct") {
+            return false;
+          }
+          return true;
+        }
+
+        return false;
+      });
+
+      for (const index of indexesToDrop) {
+        if (index.name) {
+          await this.model.collection.dropIndex(index.name);
+        }
+      }
+    } catch {
+      ChatThreadRepository.typeIndexChecked = false;
+    }
+  }
+
   async addMembers(
     threadId: string,
     memberIds: string[],
@@ -37,6 +81,12 @@ export class ChatThreadRepository extends BaseRepository<IChatThread> {
         { new: true },
       )
       .exec();
+  }
+
+  async findGroupThreadsByOwner(
+    ownerUserId: string,
+  ): Promise<IChatThread[]> {
+    return this.model.find({ type: "group", ownerUserId }).exec();
   }
 
   async removeMember(

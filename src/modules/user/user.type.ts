@@ -31,7 +31,6 @@ export type UserCreatePayload = {
   fullName: string;
   userName?: string;
   phoneNumber?: string;
-  phoneNumber?: string;
   address?: string;
   bio?: string;
   role: (typeof ROLES)[keyof typeof ROLES];
@@ -42,7 +41,6 @@ export type UserCreatePayload = {
 
 export type UpdateUserPayload = {
   fullName?: string;
-  phoneNumber?: string;
   phoneNumber?: string;
   address?: string;
   bio?: string;
