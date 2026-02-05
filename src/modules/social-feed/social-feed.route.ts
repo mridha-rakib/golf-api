@@ -24,7 +24,7 @@ const golferOrClub = authMiddleware.authorize(ROLES.GOLFER, ROLES.GOLF_CLUB);
 
 router.post("/follow/:golferUserId", golferOnly, controller.toggleFollow);
 router.get("/golfers/following", controller.listFollowingGolfers);
-router.get("/golfers", controller.listGolfers);
+router.get("/golfers", golferOrClub, controller.listGolfers);
 
 router.post("/posts", golferOrClub, optionalMediaUpload, controller.createPost);
 router.post("/posts/:postId/share", golferOrClub, controller.sharePost);

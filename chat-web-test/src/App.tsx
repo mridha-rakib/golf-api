@@ -22,9 +22,362 @@ type Message = {
   createdAt: string;
 };
 
+const appCss = `
+@import url("https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap");
+
+:root {
+  --bg: #0b1020;
+  --panel: rgba(12, 18, 32, 0.85);
+  --panel-strong: rgba(17, 27, 48, 0.95);
+  --text: #e6ecfb;
+  --muted: #9aa7c7;
+  --accent: #3aa1ff;
+  --accent-2: #4ce1c1;
+  --border: rgba(255, 255, 255, 0.08);
+  --bubble-me: linear-gradient(135deg, #3aa1ff 0%, #1f6feb 100%);
+  --bubble-them: #172238;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+}
+
+.app-shell {
+  min-height: 100vh;
+  padding: 24px;
+  font-family: "Space Grotesk", "DM Sans", sans-serif;
+  background:
+    radial-gradient(900px circle at 12% -10%, rgba(58, 161, 255, 0.25), transparent 55%),
+    radial-gradient(900px circle at 110% 10%, rgba(76, 225, 193, 0.2), transparent 55%),
+    var(--bg);
+}
+
+.top-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 18px;
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.logo-mark {
+  width: 46px;
+  height: 46px;
+  border-radius: 14px;
+  background: linear-gradient(135deg, #3aa1ff 0%, #4ce1c1 100%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.35);
+}
+
+.logo-mark svg {
+  width: 24px;
+  height: 24px;
+}
+
+.brand-title {
+  font-size: 20px;
+  font-weight: 700;
+  letter-spacing: 0.4px;
+}
+
+.brand-subtitle {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.status-pill {
+  padding: 6px 12px;
+  border-radius: 999px;
+  background: rgba(58, 161, 255, 0.15);
+  border: 1px solid rgba(58, 161, 255, 0.35);
+  font-size: 12px;
+  color: var(--text);
+}
+
+.columns {
+  display: grid;
+  grid-template-columns: 300px minmax(0, 1fr) 320px;
+  gap: 18px;
+}
+
+.sidebar,
+.main,
+.side-right {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.panel {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  padding: 14px;
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.35);
+  backdrop-filter: blur(6px);
+}
+
+.panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 10px;
+  font-weight: 600;
+}
+
+.panel-note {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.input,
+.textarea {
+  width: 100%;
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  background: #0b1324;
+  color: var(--text);
+  font-family: "DM Sans", sans-serif;
+}
+
+.textarea {
+  min-height: 74px;
+  resize: vertical;
+}
+
+.btn-row {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.btn {
+  padding: 9px 14px;
+  border-radius: 12px;
+  border: none;
+  background: var(--accent);
+  color: #051021;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.btn.secondary {
+  background: transparent;
+  color: var(--text);
+  border: 1px solid var(--border);
+}
+
+.btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.list {
+  max-height: 220px;
+  overflow: auto;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  background: rgba(8, 12, 22, 0.7);
+}
+
+.list-item {
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--border);
+  cursor: pointer;
+}
+
+.list-item:last-child {
+  border-bottom: none;
+}
+
+.list-item.selected {
+  background: rgba(58, 161, 255, 0.18);
+}
+
+.list-title {
+  font-weight: 600;
+}
+
+.list-subtitle {
+  font-size: 12px;
+  color: var(--muted);
+  margin-top: 4px;
+}
+
+.list-item.muted {
+  cursor: default;
+  color: var(--muted);
+}
+
+.chat-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-height: 560px;
+}
+
+.chat-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.chat-title {
+  font-size: 18px;
+  font-weight: 600;
+}
+
+.chat-subtitle {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.chat-scroll {
+  flex: 1;
+  max-height: 520px;
+  overflow: auto;
+  padding: 14px;
+  border-radius: 16px;
+  border: 1px solid var(--border);
+  background: #0b1324;
+}
+
+.message-row {
+  display: flex;
+  align-items: flex-end;
+  gap: 10px;
+  margin-bottom: 14px;
+}
+
+.message-row.me {
+  justify-content: flex-end;
+}
+
+.avatar {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  font-weight: 700;
+  background: #162235;
+  color: var(--muted);
+}
+
+.avatar.me {
+  background: linear-gradient(135deg, #3aa1ff 0%, #4ce1c1 100%);
+  color: #051021;
+}
+
+.message-block {
+  max-width: 72%;
+}
+
+.message-meta {
+  font-size: 12px;
+  color: var(--muted);
+  margin-bottom: 4px;
+}
+
+.message-meta.me {
+  text-align: right;
+}
+
+.bubble {
+  padding: 10px 12px;
+  border-radius: 16px;
+  border: 1px solid var(--border);
+  background: var(--bubble-them);
+}
+
+.bubble.me {
+  border: none;
+  background: var(--bubble-me);
+  color: #051021;
+}
+
+.message-text {
+  white-space: pre-wrap;
+  line-height: 1.4;
+}
+
+.message-media {
+  margin-top: 8px;
+  border-radius: 12px;
+  max-width: 240px;
+  display: block;
+  border: 1px solid var(--border);
+}
+
+.input-row {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 10px;
+}
+
+.empty-state {
+  text-align: center;
+  padding: 48px 24px;
+  color: var(--muted);
+}
+
+.log-list {
+  max-height: 200px;
+  overflow: auto;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.log-item {
+  padding: 6px 0;
+  border-bottom: 1px dashed rgba(255, 255, 255, 0.06);
+}
+
+.log-item:last-child {
+  border-bottom: none;
+}
+
+.checkbox-list label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+  font-size: 13px;
+}
+
+@media (max-width: 1100px) {
+  .columns {
+    grid-template-columns: 1fr;
+  }
+
+  .chat-panel {
+    min-height: unset;
+  }
+}
+`;
+
 export default function App() {
   const [token, setJwt] = useState("");
   const [viewerRole, setViewerRole] = useState<string | null>(null);
+  const [viewerUserId, setViewerUserId] = useState<string | null>(null);
   const [following, setFollowing] = useState<FollowingItem[]>([]);
   const [clubRoster, setClubRoster] = useState<Golfer[]>([]);
   const [threads, setThreads] = useState<Thread[]>([]);
@@ -84,7 +437,6 @@ export default function App() {
     };
   }, [socket]);
 
-  // Join the selected thread room
   useEffect(() => {
     if (!socket || !selectedThread?._id) return;
     setJoinedThreadId(null);
@@ -106,8 +458,7 @@ export default function App() {
     if (parts.length !== 3) return null;
     try {
       const payload = parts[1].replace(/-/g, "+").replace(/_/g, "/");
-      const padded =
-        payload + "===".slice((payload.length + 3) % 4);
+      const padded = payload + "===".slice((payload.length + 3) % 4);
       const decoded = atob(padded);
       return JSON.parse(decoded);
     } catch {
@@ -118,11 +469,51 @@ export default function App() {
   useEffect(() => {
     if (!rawToken) {
       setViewerRole(null);
+      setViewerUserId(null);
       return;
     }
     const payload = parseJwt(rawToken);
     setViewerRole(payload?.role ?? null);
+    setViewerUserId(
+      payload?.userId ?? payload?._id ?? payload?.id ?? payload?.sub ?? null,
+    );
   }, [rawToken]);
+
+  const userDirectory = useMemo(() => {
+    const map = new Map<string, Golfer>();
+    following.forEach((f) => map.set(f.golfer._id, f.golfer));
+    clubRoster.forEach((m) => map.set(m._id, m));
+    threads.forEach((t) => {
+      if (t.directPeer?._id) {
+        map.set(t.directPeer._id, t.directPeer);
+      }
+    });
+    if (viewerUserId) {
+      map.set(viewerUserId, { _id: viewerUserId, fullName: "You" });
+    }
+    return map;
+  }, [following, clubRoster, threads, viewerUserId]);
+
+  const getDisplayName = (id?: string | null) => {
+    if (!id) return "Unknown";
+    if (id === "me") return "You";
+    const user = userDirectory.get(id);
+    return user?.fullName || user?.email || `User ${id.slice(-6)}`;
+  };
+
+  const getInitials = (label: string) => {
+    const cleaned = label.replace(/[^a-zA-Z0-9 ]/g, " ").trim();
+    if (!cleaned) return "?";
+    const parts = cleaned.split(/\s+/).slice(0, 2);
+    const letters = parts.map((p) => p[0]).join("");
+    return letters.toUpperCase();
+  };
+
+  const formatTime = (value: string) => {
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return "";
+    return date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+  };
 
   const loadFollowing = async () => {
     if (!token.trim()) return;
@@ -171,7 +562,7 @@ export default function App() {
       if (!Array.isArray(raw)) {
         setLog((l) => [
           ...l.slice(-80),
-          `load messages: unexpected payload shape`,
+          "load messages: unexpected payload shape",
         ]);
       }
       setMessages(
@@ -182,8 +573,7 @@ export default function App() {
             text: m.text,
             imageUrl: m.imageUrl,
             createdAt: m.createdAt,
-          }))
-          .reverse(),
+          })),
       );
       setLog((l) => [...l.slice(-80), `loaded ${data.length} messages`]);
     } catch (err: any) {
@@ -220,7 +610,7 @@ export default function App() {
       ...msgs,
       {
         _id: tempId,
-        senderUserId: "me",
+        senderUserId: viewerUserId ?? "me",
         text: trimmed,
         imageUrl: null,
         createdAt: new Date().toISOString(),
@@ -283,251 +673,347 @@ export default function App() {
     await loadThreads();
   };
 
+  const socketStatus = socket?.connected
+    ? "Online"
+    : socket
+      ? "Connecting"
+      : "Offline";
+
+  const selectedTitle = selectedThread
+    ? selectedThread.type === "direct"
+      ? selectedThread.directPeer?.fullName ||
+        selectedThread.directPeer?.email ||
+        "Direct message"
+      : selectedThread.name || "Group chat"
+    : "";
+
   return (
-    <div style={{ padding: 16, fontFamily: "Segoe UI, sans-serif" }}>
-      <h2>Chat Tester</h2>
-      <label>JWT:</label>
-      <input
-        style={{ width: "100%" }}
-        value={token}
-        onChange={(e) => setJwt(e.target.value)}
-      />
-      <div style={{ marginTop: 8, display: "flex", gap: 8 }}>
-        <button onClick={loadFollowing}>Load Following</button>
-        <button onClick={loadThreads}>Load Threads</button>
-      </div>
-
-      {viewerRole !== "golf_club" && (
-        <h3 style={{ marginTop: 16 }}>Following (to find direct peers)</h3>
-      )}
-      <div
-        style={{ maxHeight: 200, overflow: "auto", border: "1px solid #ddd" }}
-      >
-        {viewerRole === "golf_club" &&
-          clubRoster.map((member) => (
-            <div
-              key={member._id}
-              style={{
-                padding: 8,
-                borderBottom: "1px solid #eee",
-                background: "#fff",
-              }}
-            >
-              {member.fullName || member.email || member._id}
-            </div>
-          ))}
-        {viewerRole === "golf_club" && !clubRoster.length && (
-          <div style={{ padding: 8 }}>No club members loaded.</div>
-        )}
-        {viewerRole !== "golf_club" &&
-          following.map((f) => (
-            <div
-              key={f.golfer._id}
-              onClick={() => setSelectedPeer(f.golfer)}
-              style={{
-                padding: 8,
-                borderBottom: "1px solid #eee",
-                cursor: "pointer",
-                background:
-                  selectedPeer?._id === f.golfer._id ? "#e8f0ff" : "#fff",
-              }}
-            >
-              {f.golfer.fullName || f.golfer.email || f.golfer._id}
-            </div>
-          ))}
-        {viewerRole !== "golf_club" && !following.length && (
-          <div style={{ padding: 8 }}>No following golfers loaded.</div>
-        )}
-      </div>
-
-      {viewerRole !== "golf_club" && (
-        <div style={{ marginTop: 8 }}>
-          <button
-            disabled={!selectedPeer}
-            onClick={async () => {
-              if (!selectedPeer) return;
-              if (!token.trim()) return;
-              setToken(token.trim());
-              try {
-                const res = await api.post("/chat/threads/direct", {
-                  golferUserId: selectedPeer._id,
-                });
-                const thread = res.data.data ?? res.data;
-                setLog((l) => [
-                  ...l.slice(-80),
-                  `direct ready with ${
-                    selectedPeer.fullName || selectedPeer._id
-                  }`,
-                ]);
-                setSelectedThread(thread);
-                await loadThreads();
-                await loadMessages(thread._id);
-              } catch (err: any) {
-                setLog((l) => [
-                  ...l.slice(-80),
-                  `direct error: ${err?.message ?? err}`,
-                ]);
-              }
-            }}
-            style={{ marginTop: 4 }}
-          >
-            Create / Load Direct Thread
-          </button>
-        </div>
-      )}
-
-      <h3 style={{ marginTop: 16 }}>Direct Threads</h3>
-      <div
-        style={{ maxHeight: 200, overflow: "auto", border: "1px solid #ddd" }}
-      >
-        {threads
-          .filter((t) => t.type === "direct")
-          .map((t) => (
-            <div
-              key={t._id}
-              onClick={async () => {
-                setSelectedThread(t);
-                await loadMessages(t._id);
-              }}
-              style={{
-                padding: 8,
-                cursor: "pointer",
-                background: selectedThread?._id === t._id ? "#e8f0ff" : "#fff",
-                borderBottom: "1px solid #eee",
-              }}
-            >
-              {t.directPeer?.fullName ||
-                t.directPeer?.email ||
-                `DM ${t._id.slice(-6)}`}
-            </div>
-          ))}
-        {!threads.some((t) => t.type === "direct") && (
-          <div style={{ padding: 8 }}>
-            No direct threads. Create one via backend then reload.
-          </div>
-        )}
-      </div>
-
-      <h3 style={{ marginTop: 16 }}>Group Threads</h3>
-      <div
-        style={{ maxHeight: 200, overflow: "auto", border: "1px solid #ddd" }}
-      >
-        {threads
-          .filter((t) => t.type === "group")
-          .map((t) => (
-            <div
-              key={t._id}
-              onClick={async () => {
-                setSelectedThread(t);
-                await loadMessages(t._id);
-              }}
-              style={{
-                padding: 8,
-                cursor: "pointer",
-                background: selectedThread?._id === t._id ? "#e8f0ff" : "#fff",
-                borderBottom: "1px solid #eee",
-              }}
-            >
-              {t.name || `Group ${t._id}`}
-            </div>
-          ))}
-        {!threads.some((t) => t.type === "group") && (
-          <div style={{ padding: 8 }}>No groups loaded.</div>
-        )}
-      </div>
-
-      <h4 style={{ marginTop: 12 }}>Create Group</h4>
-      {viewerRole === "golf_club" && (
-        <div style={{ marginBottom: 6, fontSize: 12, color: "#666" }}>
-          Club groups auto-add all club members.
-        </div>
-      )}
-      <input
-        style={{ width: "100%", marginBottom: 8 }}
-        placeholder="Group name"
-        value={groupName}
-        onChange={(e) => setGroupName(e.target.value)}
-      />
-      {viewerRole !== "golf_club" && (
-        <div
-          style={{
-            maxHeight: 120,
-            overflow: "auto",
-            border: "1px solid #ddd",
-            padding: 8,
-            marginBottom: 8,
-          }}
-        >
-          {following.map((f) => (
-            <label key={f.golfer._id} style={{ display: "block" }}>
-              <input
-                type="checkbox"
-                checked={groupMembers.has(f.golfer._id)}
-                onChange={() => toggleMember(f.golfer._id)}
+    <div className="app-shell">
+      <style>{appCss}</style>
+      <header className="top-bar">
+        <div className="brand">
+          <div className="logo-mark" aria-hidden>
+            <svg viewBox="0 0 24 24" fill="none">
+              <path
+                d="M6 6h12a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H10l-4 4v-4H6a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2Z"
+                fill="#0b1020"
               />
-              &nbsp;{f.golfer.fullName || f.golfer.email || f.golfer._id}
-            </label>
-          ))}
-          {!following.length && <div>Load following to pick members.</div>}
-        </div>
-      )}
-      <button onClick={createGroup}>Create Group</button>
-
-      {selectedThread && (
-        <>
-          <h3 style={{ marginTop: 16 }}>
-            Chat in {selectedThread.name || selectedThread._id}
-          </h3>
-          <div
-            style={{
-              border: "1px solid #ddd",
-              padding: 8,
-              maxHeight: 240,
-              overflow: "auto",
-              background: "#111",
-              color: "#ddd",
-            }}
-          >
-            {messages.map((m) => (
-              <div key={m._id} style={{ marginBottom: 6 }}>
-                <div style={{ fontSize: 12, color: "#888" }}>
-                  {m.senderUserId} ·{" "}
-                  {new Date(m.createdAt).toLocaleTimeString()}
-                </div>
-                <div>{m.text || "[media]"}</div>
-              </div>
-            ))}
-            {messagesError && (
-              <div style={{ color: "#f88" }}>Error: {messagesError}</div>
-            )}
-            {!messages.length && !messagesError && <div>No history</div>}
+              <path
+                d="m9 9 3.5 3.5L9 16m6-7-3.5 3.5L15 16"
+                stroke="#e6ecfb"
+                strokeWidth="1.6"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+            </svg>
           </div>
-          <textarea
-            rows={3}
-            style={{ width: "100%" }}
-            value={text}
-            onChange={(e) => setText(e.target.value)}
-            placeholder="Type a message"
-          />
-          <button onClick={sendMessage} style={{ marginTop: 8 }}>
-            Send Message
-          </button>
-        </>
-      )}
+          <div>
+            <div className="brand-title">Golf Messenger</div>
+            <div className="brand-subtitle">
+              Threads, groups, and realtime updates
+            </div>
+          </div>
+        </div>
+        <div className="status-pill">Socket: {socketStatus}</div>
+      </header>
 
-      <h3 style={{ marginTop: 16 }}>Log</h3>
-      <div
-        style={{
-          maxHeight: 160,
-          overflow: "auto",
-          fontSize: 12,
-          border: "1px solid #ddd",
-          padding: 8,
-        }}
-      >
-        {log.map((l, i) => (
-          <div key={i}>{l}</div>
-        ))}
+      <div className="columns">
+        <aside className="sidebar">
+          <section className="panel">
+            <div className="panel-header">
+              <span>Connection</span>
+              {viewerRole && <span className="panel-note">{viewerRole}</span>}
+            </div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+              <input
+                className="input"
+                placeholder="Paste JWT"
+                value={token}
+                onChange={(e) => setJwt(e.target.value)}
+              />
+              <div className="btn-row">
+                <button className="btn" onClick={loadFollowing}>
+                  Load People
+                </button>
+                <button className="btn secondary" onClick={loadThreads}>
+                  Load Threads
+                </button>
+              </div>
+            </div>
+          </section>
+
+          <section className="panel">
+            <div className="panel-header">
+              <span>{viewerRole === "golf_club" ? "Club Roster" : "Following"}</span>
+            </div>
+            <div className="list">
+              {viewerRole === "golf_club" &&
+                clubRoster.map((member) => (
+                  <div key={member._id} className="list-item muted">
+                    <div className="list-title">
+                      {member.fullName || member.email || member._id}
+                    </div>
+                  </div>
+                ))}
+              {viewerRole === "golf_club" && !clubRoster.length && (
+                <div className="list-item muted">No club members loaded.</div>
+              )}
+              {viewerRole !== "golf_club" &&
+                following.map((f) => (
+                  <div
+                    key={f.golfer._id}
+                    className={`list-item ${
+                      selectedPeer?._id === f.golfer._id ? "selected" : ""
+                    }`}
+                    onClick={() => setSelectedPeer(f.golfer)}
+                  >
+                    <div className="list-title">
+                      {f.golfer.fullName || f.golfer.email || f.golfer._id}
+                    </div>
+                    <div className="list-subtitle">Tap to start a direct</div>
+                  </div>
+                ))}
+              {viewerRole !== "golf_club" && !following.length && (
+                <div className="list-item muted">No following golfers loaded.</div>
+              )}
+            </div>
+            {viewerRole !== "golf_club" && (
+              <button
+                className="btn secondary"
+                disabled={!selectedPeer}
+                onClick={async () => {
+                  if (!selectedPeer) return;
+                  if (!token.trim()) return;
+                  setToken(token.trim());
+                  try {
+                    const res = await api.post("/chat/threads/direct", {
+                      golferUserId: selectedPeer._id,
+                    });
+                    const thread = res.data.data ?? res.data;
+                    setLog((l) => [
+                      ...l.slice(-80),
+                      `direct ready with ${
+                        selectedPeer.fullName || selectedPeer._id
+                      }`,
+                    ]);
+                    setSelectedThread(thread);
+                    await loadThreads();
+                    await loadMessages(thread._id);
+                  } catch (err: any) {
+                    setLog((l) => [
+                      ...l.slice(-80),
+                      `direct error: ${err?.message ?? err}`,
+                    ]);
+                  }
+                }}
+                style={{ marginTop: 10, width: "100%" }}
+              >
+                Create or Load Direct
+              </button>
+            )}
+          </section>
+
+          <section className="panel">
+            <div className="panel-header">
+              <span>Direct Threads</span>
+            </div>
+            <div className="list">
+              {threads
+                .filter((t) => t.type === "direct")
+                .map((t) => (
+                  <div
+                    key={t._id}
+                    className={`list-item ${
+                      selectedThread?._id === t._id ? "selected" : ""
+                    }`}
+                    onClick={async () => {
+                      setSelectedThread(t);
+                      await loadMessages(t._id);
+                    }}
+                  >
+                    <div className="list-title">
+                      {t.directPeer?.fullName ||
+                        t.directPeer?.email ||
+                        `DM ${t._id.slice(-6)}`}
+                    </div>
+                    <div className="list-subtitle">
+                      {t.lastMessage?.text || "No messages yet"}
+                    </div>
+                  </div>
+                ))}
+              {!threads.some((t) => t.type === "direct") && (
+                <div className="list-item muted">
+                  No direct threads. Create one then reload.
+                </div>
+              )}
+            </div>
+          </section>
+
+          <section className="panel">
+            <div className="panel-header">
+              <span>Group Threads</span>
+            </div>
+            <div className="list">
+              {threads
+                .filter((t) => t.type === "group")
+                .map((t) => (
+                  <div
+                    key={t._id}
+                    className={`list-item ${
+                      selectedThread?._id === t._id ? "selected" : ""
+                    }`}
+                    onClick={async () => {
+                      setSelectedThread(t);
+                      await loadMessages(t._id);
+                    }}
+                  >
+                    <div className="list-title">{t.name || `Group ${t._id}`}</div>
+                    <div className="list-subtitle">
+                      {t.lastMessage?.text || "No messages yet"}
+                    </div>
+                  </div>
+                ))}
+              {!threads.some((t) => t.type === "group") && (
+                <div className="list-item muted">No groups loaded.</div>
+              )}
+            </div>
+          </section>
+        </aside>
+
+        <main className="main">
+          <section className="panel chat-panel">
+            {selectedThread ? (
+              <>
+                <div className="chat-header">
+                  <div>
+                    <div className="chat-title">{selectedTitle}</div>
+                    <div className="chat-subtitle">
+                      {selectedThread.type === "direct"
+                        ? "Direct conversation"
+                        : `Group members: ${selectedThread.memberUserIds?.length ?? 0}`}
+                    </div>
+                  </div>
+                  <div className="panel-note">{selectedThread._id}</div>
+                </div>
+
+                <div className="chat-scroll">
+                  {messages.map((m) => {
+                    const isOwn =
+                      m.senderUserId === "me" ||
+                      (viewerUserId && m.senderUserId === viewerUserId);
+                    const displayName = getDisplayName(m.senderUserId);
+                    const initials = getInitials(displayName);
+                    return (
+                      <div
+                        key={m._id}
+                        className={`message-row ${isOwn ? "me" : ""}`}
+                      >
+                        {!isOwn && <div className="avatar">{initials}</div>}
+                        <div className="message-block">
+                          <div
+                            className={`message-meta ${isOwn ? "me" : ""}`}
+                          >
+                            {displayName} - {formatTime(m.createdAt)}
+                          </div>
+                          <div className={`bubble ${isOwn ? "me" : ""}`}>
+                            <div className="message-text">
+                              {m.text || "[media]"}
+                            </div>
+                            {m.imageUrl && (
+                              <img
+                                className="message-media"
+                                src={m.imageUrl}
+                                alt="attachment"
+                                loading="lazy"
+                              />
+                            )}
+                          </div>
+                        </div>
+                        {isOwn && <div className="avatar me">{initials}</div>}
+                      </div>
+                    );
+                  })}
+                  {messagesError && (
+                    <div className="panel-note">Error: {messagesError}</div>
+                  )}
+                  {!messages.length && !messagesError && (
+                    <div className="empty-state">No history yet.</div>
+                  )}
+                </div>
+
+                <div className="input-row">
+                  <textarea
+                    className="textarea"
+                    value={text}
+                    onChange={(e) => setText(e.target.value)}
+                    placeholder="Type a message"
+                  />
+                  <button className="btn" onClick={sendMessage}>
+                    Send
+                  </button>
+                </div>
+              </>
+            ) : (
+              <div className="empty-state">
+                Select a thread to open the conversation.
+              </div>
+            )}
+          </section>
+        </main>
+
+        <aside className="side-right">
+          <section className="panel">
+            <div className="panel-header">
+              <span>Create Group</span>
+            </div>
+            {viewerRole === "golf_club" && (
+              <div className="panel-note" style={{ marginBottom: 10 }}>
+                Club groups auto-add all club members.
+              </div>
+            )}
+            <input
+              className="input"
+              placeholder="Group name"
+              value={groupName}
+              onChange={(e) => setGroupName(e.target.value)}
+            />
+            {viewerRole !== "golf_club" && (
+              <div className="list checkbox-list" style={{ marginTop: 10 }}>
+                {following.map((f) => (
+                  <label key={f.golfer._id}>
+                    <input
+                      type="checkbox"
+                      checked={groupMembers.has(f.golfer._id)}
+                      onChange={() => toggleMember(f.golfer._id)}
+                    />
+                    {f.golfer.fullName || f.golfer.email || f.golfer._id}
+                  </label>
+                ))}
+                {!following.length && (
+                  <div className="list-item muted">
+                    Load following to pick members.
+                  </div>
+                )}
+              </div>
+            )}
+            <button className="btn" onClick={createGroup} style={{ marginTop: 10 }}>
+              Create Group
+            </button>
+          </section>
+
+          <section className="panel">
+            <div className="panel-header">
+              <span>Log</span>
+            </div>
+            <div className="log-list">
+              {log.map((l, i) => (
+                <div key={i} className="log-item">
+                  {l}
+                </div>
+              ))}
+            </div>
+          </section>
+        </aside>
       </div>
     </div>
   );

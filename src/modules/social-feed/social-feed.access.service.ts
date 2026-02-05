@@ -36,6 +36,20 @@ export class SocialAccessService {
     return user;
   }
 
+  async getGolferOrClubOrFail(userId: string) {
+    const user = await this.userService.getById(userId);
+
+    if (!user) {
+      throw new NotFoundException("User not found.");
+    }
+
+    if (![ROLES.GOLFER, ROLES.GOLF_CLUB].includes(user.role)) {
+      throw new BadRequestException("User is not a golfer or golf club.");
+    }
+
+    return user;
+  }
+
   async canViewGolfer(
     viewerUserId: string,
     targetUserId: string,

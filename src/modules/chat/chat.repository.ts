@@ -24,7 +24,7 @@ export class ChatThreadRepository extends BaseRepository<IChatThread> {
   async findThreadsForUser(userId: string): Promise<IChatThread[]> {
     return this.model
       .find({ memberUserIds: userId })
-      .sort({ updatedAt: 1 })
+      .sort({ updatedAt: -1 })
       .exec();
   }
 
@@ -83,9 +83,7 @@ export class ChatThreadRepository extends BaseRepository<IChatThread> {
       .exec();
   }
 
-  async findGroupThreadsByOwner(
-    ownerUserId: string,
-  ): Promise<IChatThread[]> {
+  async findGroupThreadsByOwner(ownerUserId: string): Promise<IChatThread[]> {
     return this.model.find({ type: "group", ownerUserId }).exec();
   }
 
@@ -120,6 +118,6 @@ export class ChatMessageRepository extends BaseRepository<IChatMessage> {
   }
 
   async findLastByThread(threadId: string): Promise<IChatMessage | null> {
-    return this.model.findOne({ threadId }).sort({ createdAt: 1 }).exec();
+    return this.model.findOne({ threadId }).sort({ createdAt: -1 }).exec();
   }
 }

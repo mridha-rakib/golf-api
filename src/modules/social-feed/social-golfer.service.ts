@@ -26,7 +26,7 @@ export class SocialGolferService {
     viewerUserId: string,
     query: PaginationQuery,
   ): Promise<PaginatedResponse<SocialGolferListItem>> {
-    await this.accessService.getGolferOrFail(viewerUserId);
+    const viewer = await this.accessService.getGolferOrClubOrFail(viewerUserId);
 
     const {
       page = 1,
@@ -57,7 +57,7 @@ export class SocialGolferService {
 
     const targetIds = golfers.map((golfer) => golfer._id.toString());
     const followingIds =
-      targetIds.length > 0
+      viewer.role === ROLES.GOLFER && targetIds.length > 0
         ? await this.followRepository.findFollowingIdsForTargets(
             viewerUserId,
             targetIds,

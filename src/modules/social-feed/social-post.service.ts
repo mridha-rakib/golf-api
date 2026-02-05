@@ -168,6 +168,7 @@ export class SocialPostService {
               golfer: sharedMap.get(summary.sharedFromPost.golferUserId)!,
             }
           : null,
+      sharedBy: summary.sharedFromPostId ? profile : null,
     }));
   }
 
@@ -233,6 +234,7 @@ export class SocialPostService {
         ...response,
         golfer,
         sharedFromPost,
+        sharedBy: response.sharedFromPostId ? golfer : null,
       });
     }
 

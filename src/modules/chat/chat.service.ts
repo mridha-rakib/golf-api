@@ -333,6 +333,16 @@ export class ChatService {
       throw new ForbiddenException("You are not a member of this thread.");
     }
 
+    if (thread.type === "direct") {
+      const peerId =
+        thread.memberUserIds.map(String).find((id) => id !== senderUserId) ??
+        null;
+      if (!peerId) {
+        throw new BadRequestException("Direct thread is missing a peer.");
+      }
+      await this.assertCanDm(senderUserId, peerId);
+    }
+
     this.validateMessagePayload(payload.type, payload.text, payload.imageUrl);
 
     const message = await this.messageRepo.create({
