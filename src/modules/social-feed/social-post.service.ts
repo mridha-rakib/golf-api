@@ -125,8 +125,13 @@ export class SocialPostService {
   async listPostsByGolfer(
     viewerUserId: string,
     golferUserId: string,
+    options: { skipAccessCheck?: boolean } = {},
   ): Promise<SocialFeedPostResponse[]> {
-    await this.accessService.assertCanViewGolfer(viewerUserId, golferUserId);
+    if (options.skipAccessCheck) {
+      await this.accessService.getGolferOrFail(golferUserId);
+    } else {
+      await this.accessService.assertCanViewGolfer(viewerUserId, golferUserId);
+    }
     const posts = await this.postRepository.findByGolferUserId(golferUserId);
 
     const summaries = await Promise.all(
@@ -238,7 +243,7 @@ export class SocialPostService {
       });
     }
 
-    return { posts: responses, total: responses.length };
+    return { posts: responses, total };
   }
 
   async listMediaByGolfer(

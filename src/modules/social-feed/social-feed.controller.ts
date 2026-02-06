@@ -1,9 +1,9 @@
+import { ROLES } from "@/constants/app.constants";
 import { asyncHandler } from "@/middlewares/async-handler.middleware";
 import { UnauthorizedException } from "@/utils/app-error.utils";
 import { PaginationHelper } from "@/utils/pagination-helper";
 import { ApiResponse } from "@/utils/response.utils";
 import { zParse } from "@/utils/validators.utils";
-import { ROLES } from "@/constants/app.constants";
 import type { Request, Response } from "express";
 import { UserService } from "../user/user.service";
 import { SocialCommentService } from "./social-comment.service";
@@ -24,11 +24,11 @@ import type {
   SocialCommentResponse,
   SocialFeedCommentResponse,
   SocialFeedItemResponse,
+  SocialFeedPostResponse,
   SocialPostCommentsGroupWithCommenter,
   SocialPostDetailsResponse,
   SocialPostMediaGroup,
   SocialPostResponse,
-  ReactionWithUser,
 } from "./social-feed.type";
 import { SocialFollowService } from "./social-follow.service";
 import { SocialGolferService } from "./social-golfer.service";
@@ -236,10 +236,18 @@ export class SocialFeedController {
     const validated = await zParse(profileSchema, req);
     const targetUserId = validated.params.golferUserId;
     const viewerRole = req.user?.role;
-    const result =
+    const baseResult =
       viewerRole === ROLES.GOLF_CLUB
         ? await this.profileService.getProfileForClub(userId, targetUserId)
         : await this.profileService.getGolferProfile(userId, targetUserId);
+    const detailedPosts = await this.enrichPostsWithDetails(
+      userId,
+      baseResult.posts,
+    );
+    const result = {
+      ...baseResult,
+      posts: detailedPosts,
+    };
 
     ApiResponse.success(res, result, "Profile fetched successfully");
   });
@@ -261,28 +269,7 @@ export class SocialFeedController {
     }
 
     const posts = await this.postService.listPostsByGolfer(userId, userId);
-    const reactionsByPostId = await this.reactionService.listReactionsWithUsers(
-      userId,
-      posts.map((p) => p._id),
-    );
-
-    const enriched: SocialFeedItemResponse[] = await Promise.all(
-      posts.map(async (post) => {
-        const [comments, reaction] = await Promise.all([
-          this.commentService.getPostComments(userId, post._id),
-          this.reactionService.getReactionState(userId, post._id),
-        ]);
-        const commentsWithGolfer = await this.attachCommenters(comments);
-
-        return {
-          ...post,
-          comments: commentsWithGolfer,
-          reactCount: reaction.reactionCount,
-          commentCount: this.countComments(commentsWithGolfer),
-          reactions: reactionsByPostId[post._id] ?? [],
-        };
-      }),
-    );
+    const enriched = await this.enrichPostsWithDetails(userId, posts);
 
     ApiResponse.success(res, enriched, "Posts fetched successfully");
   });
@@ -297,28 +284,7 @@ export class SocialFeedController {
       req.query,
     );
     const result = await this.postService.listFeedPosts(userId, page, limit);
-    const reactionsByPostId =
-      await this.reactionService.listReactionsWithUsers(
-        userId,
-        result.posts.map((p) => p._id),
-      );
-    const feed: SocialFeedItemResponse[] = await Promise.all(
-      result.posts.map(async (post) => {
-        const [comments, reaction] = await Promise.all([
-          this.commentService.getPostComments(userId, post._id),
-          this.reactionService.getReactionState(userId, post._id),
-        ]);
-        const commentsWithGolfer = await this.attachCommenters(comments);
-
-        return {
-          ...post,
-          comments: commentsWithGolfer,
-          reactCount: reaction.reactionCount,
-          commentCount: this.countComments(commentsWithGolfer),
-          reactions: reactionsByPostId[post._id] ?? [],
-        };
-      }),
-    );
+    const feed = await this.enrichPostsWithDetails(userId, result.posts);
     const response = PaginationHelper.buildResponse(
       feed,
       result.total,
@@ -397,6 +363,34 @@ export class SocialFeedController {
     return comments.reduce(
       (total, comment) => total + 1 + this.countComments(comment.replies),
       0,
+    );
+  }
+
+  private async enrichPostsWithDetails(
+    userId: string,
+    posts: SocialFeedPostResponse[],
+  ): Promise<SocialFeedItemResponse[]> {
+    const reactionsByPostId = await this.reactionService.listReactionsWithUsers(
+      userId,
+      posts.map((post) => post._id),
+    );
+
+    return Promise.all(
+      posts.map(async (post) => {
+        const [comments, reaction] = await Promise.all([
+          this.commentService.getPostComments(userId, post._id),
+          this.reactionService.getReactionState(userId, post._id),
+        ]);
+        const commentsWithGolfer = await this.attachCommenters(comments);
+
+        return {
+          ...post,
+          comments: commentsWithGolfer,
+          reactCount: reaction.reactionCount,
+          commentCount: this.countComments(commentsWithGolfer),
+          reactions: reactionsByPostId[post._id] ?? [],
+        };
+      }),
     );
   }
 

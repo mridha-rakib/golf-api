@@ -3,9 +3,9 @@ import { model, Schema } from "mongoose";
 import type {
   ISocialFollow,
   ISocialPost,
-  ISocialPostView,
   ISocialPostComment,
   ISocialPostReaction,
+  ISocialPostView,
 } from "./social-feed.interface";
 
 const socialPostSchema = BaseSchemaUtil.createSchema<ISocialPost>({
@@ -46,8 +46,8 @@ const socialPostSchema = BaseSchemaUtil.createSchema<ISocialPost>({
 
 socialPostSchema.index({ golferUserId: 1, createdAt: -1 });
 
-const socialPostReactionSchema = BaseSchemaUtil.createSchema<ISocialPostReaction>(
-  {
+const socialPostReactionSchema =
+  BaseSchemaUtil.createSchema<ISocialPostReaction>({
     postId: {
       type: Schema.Types.ObjectId,
       ref: "SocialPost",
@@ -65,39 +65,40 @@ const socialPostReactionSchema = BaseSchemaUtil.createSchema<ISocialPostReaction
       enum: ["love"],
       default: "love",
     },
-  }
-);
+  });
 
 socialPostReactionSchema.index(
   { postId: 1, golferUserId: 1 },
-  { unique: true }
+  { unique: true },
 );
 
-const socialPostCommentSchema = BaseSchemaUtil.createSchema<ISocialPostComment>({
-  postId: {
-    type: Schema.Types.ObjectId,
-    ref: "SocialPost",
-    required: true,
-    index: true,
+const socialPostCommentSchema = BaseSchemaUtil.createSchema<ISocialPostComment>(
+  {
+    postId: {
+      type: Schema.Types.ObjectId,
+      ref: "SocialPost",
+      required: true,
+      index: true,
+    },
+    golferUserId: {
+      type: Schema.Types.ObjectId,
+      ref: "User",
+      required: true,
+      index: true,
+    },
+    text: {
+      type: String,
+      required: true,
+      trim: true,
+    },
+    parentCommentId: {
+      type: Schema.Types.ObjectId,
+      ref: "SocialPostComment",
+      default: null,
+      index: true,
+    },
   },
-  golferUserId: {
-    type: Schema.Types.ObjectId,
-    ref: "User",
-    required: true,
-    index: true,
-  },
-  text: {
-    type: String,
-    required: true,
-    trim: true,
-  },
-  parentCommentId: {
-    type: Schema.Types.ObjectId,
-    ref: "SocialPostComment",
-    default: null,
-    index: true,
-  },
-});
+);
 
 socialPostCommentSchema.index({ postId: 1, parentCommentId: 1, createdAt: 1 });
 
@@ -118,7 +119,7 @@ const socialFollowSchema = BaseSchemaUtil.createSchema<ISocialFollow>({
 
 socialFollowSchema.index(
   { followerUserId: 1, followingUserId: 1 },
-  { unique: true }
+  { unique: true },
 );
 
 const socialPostViewSchema = BaseSchemaUtil.createSchema<ISocialPostView>({
@@ -143,25 +144,22 @@ const socialPostViewSchema = BaseSchemaUtil.createSchema<ISocialPostView>({
   },
 });
 
-socialPostViewSchema.index(
-  { postId: 1, viewerEmail: 1 },
-  { unique: true }
-);
+socialPostViewSchema.index({ postId: 1, viewerEmail: 1 }, { unique: true });
 
 export const SocialPost = model<ISocialPost>("SocialPost", socialPostSchema);
 export const SocialPostReaction = model<ISocialPostReaction>(
   "SocialPostReaction",
-  socialPostReactionSchema
+  socialPostReactionSchema,
 );
 export const SocialPostComment = model<ISocialPostComment>(
   "SocialPostComment",
-  socialPostCommentSchema
+  socialPostCommentSchema,
 );
 export const SocialFollow = model<ISocialFollow>(
   "SocialFollow",
-  socialFollowSchema
+  socialFollowSchema,
 );
 export const SocialPostView = model<ISocialPostView>(
   "SocialPostView",
-  socialPostViewSchema
+  socialPostViewSchema,
 );

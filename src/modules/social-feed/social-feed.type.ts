@@ -124,7 +124,16 @@ export type ViewCountResponse = {
 
 export type SocialProfileResponse = {
   profile: UserResponse;
-  posts: SocialPostResponse[];
+  posts: SocialFeedItemResponse[];
+  followers: UserResponse[];
+  following: UserResponse[];
+};
+
+export type SocialProfileBaseResponse = {
+  profile: UserResponse;
+  posts: SocialFeedPostResponse[];
+  followers: UserResponse[];
+  following: UserResponse[];
 };
 
 export type SocialGolferListItem = {

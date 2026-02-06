@@ -1,13 +1,11 @@
 import { UserService } from "@/modules/user/user.service";
 import type { UserResponse } from "@/modules/user/user.type";
 import { SocialAccessService } from "./social-feed.access.service";
-import { SocialPostRepository } from "./social-feed.repository";
-import type { SocialProfileResponse } from "./social-feed.type";
+import type { SocialProfileBaseResponse } from "./social-feed.type";
 import { SocialPostService } from "./social-post.service";
 
 export class SocialProfileService {
   private accessService: SocialAccessService;
-  private postRepository: SocialPostRepository;
   private postService: SocialPostService;
   private userService: UserService;
 
@@ -16,7 +14,6 @@ export class SocialProfileService {
     postService: SocialPostService,
   ) {
     this.accessService = accessService;
-    this.postRepository = new SocialPostRepository();
     this.postService = postService;
     this.userService = new UserService();
   }
@@ -24,34 +21,49 @@ export class SocialProfileService {
   async getGolferProfile(
     viewerUserId: string,
     golferUserId: string,
-  ): Promise<SocialProfileResponse> {
-    await this.accessService.assertCanViewGolfer(viewerUserId, golferUserId);
-
-    const profile = await this.userService.getProfile(golferUserId);
-    const posts = await this.postRepository.findByGolferUserId(golferUserId);
-    const postResponses = await Promise.all(
-      posts.map((post) => this.postService.toPostResponse(post, viewerUserId)),
+  ): Promise<SocialProfileBaseResponse> {
+    await this.accessService.getGolferOrFail(golferUserId);
+    const [profile, followers, following] = await Promise.all([
+      this.userService.getProfile(golferUserId),
+      this.userService.listFollowers(golferUserId),
+      this.userService.listFollowing(golferUserId),
+    ]);
+    const canViewPosts = await this.accessService.canViewGolfer(
+      viewerUserId,
+      golferUserId,
     );
+    const postResponses = canViewPosts
+      ? await this.postService.listPostsByGolfer(viewerUserId, golferUserId)
+      : [];
 
     return {
       profile,
       posts: postResponses,
+      followers,
+      following,
     };
   }
 
   async getProfileForClub(
     viewerUserId: string,
     targetUserId: string,
-  ): Promise<SocialProfileResponse> {
-    const profile = await this.userService.getProfile(targetUserId);
-    const posts = await this.postRepository.findByGolferUserId(targetUserId);
-    const postResponses = await Promise.all(
-      posts.map((post) => this.postService.toPostResponse(post, viewerUserId)),
+  ): Promise<SocialProfileBaseResponse> {
+    const [profile, followers, following] = await Promise.all([
+      this.userService.getProfile(targetUserId),
+      this.userService.listFollowers(targetUserId),
+      this.userService.listFollowing(targetUserId),
+    ]);
+    const postResponses = await this.postService.listPostsByGolfer(
+      viewerUserId,
+      targetUserId,
+      { skipAccessCheck: true },
     );
 
     return {
       profile,
       posts: postResponses,
+      followers,
+      following,
     };
   }
 
