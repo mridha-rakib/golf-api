@@ -16,6 +16,7 @@ import {
 } from "@/utils/app-error.utils";
 import { comparePassword, hashPassword } from "@/utils/password.utils";
 import { EmailVerificationService } from "../email-verification/email-verification.service";
+import { NotificationService } from "../notification/notification.service";
 import {
   IResendOTPRequest,
   UserType,
@@ -37,12 +38,14 @@ export class AuthService {
   private passwordResetService: PasswordResetService;
   private emailVerificationService: EmailVerificationService;
   private emailService: EmailService;
+  private notificationService: NotificationService;
 
   constructor() {
     this.userService = new UserService();
     this.passwordResetService = new PasswordResetService();
     this.emailService = new EmailService();
     this.emailVerificationService = new EmailVerificationService();
+    this.notificationService = new NotificationService();
   }
 
   /**
@@ -110,6 +113,20 @@ export class AuthService {
       emailVerified: false,
       accountStatus: ACCOUNT_STATUS.PENDING,
     });
+
+    try {
+      await this.notificationService.notifyAdminNewUser({
+        userId: user._id.toString(),
+        name: user.fullName,
+        email: user.email,
+        role: user.role,
+      });
+    } catch (error) {
+      logger.warn(
+        { userId: user._id.toString(), error },
+        "Failed to create admin notification for new user",
+      );
+    }
 
     const verification = await this.emailVerificationService.createOTP({
       userId: user._id.toString(),

@@ -232,6 +232,32 @@ export class UserService {
     return this.toUserResponse(updated);
   }
 
+  async updateAccountStatus(
+    userId: string,
+    accountStatus: (typeof ACCOUNT_STATUS)[keyof typeof ACCOUNT_STATUS],
+  ): Promise<UserResponse> {
+    const updated = await this.userRepository.updateById(userId, {
+      accountStatus,
+    });
+    if (!updated) {
+      throw new NotFoundException(MESSAGES.USER.USER_NOT_FOUND);
+    }
+
+    if (accountStatus !== ACCOUNT_STATUS.ACTIVE) {
+      await this.invalidateAllRefreshTokens(userId);
+    }
+
+    return this.toUserResponse(updated);
+  }
+
+  async softDeleteUser(userId: string): Promise<void> {
+    const deleted = await this.userRepository.softDelete(userId);
+    if (!deleted) {
+      throw new NotFoundException(MESSAGES.USER.USER_NOT_FOUND);
+    }
+    await this.invalidateAllRefreshTokens(userId);
+  }
+
   async listFollowing(userId: string): Promise<UserResponse[]> {
     const followingIds = await this.followRepository.findFollowingIds(userId);
     if (followingIds.length === 0) return [];

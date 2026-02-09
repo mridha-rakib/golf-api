@@ -74,16 +74,25 @@ export class GolfClubController {
 
   updateClubRoles = asyncHandler(async (req: Request, res: Response) => {
     const validated = await zParse(clubRolesSchema, req);
+    const adminUserId = req.user?.userId;
+    if (!adminUserId) {
+      throw new UnauthorizedException(MESSAGES.AUTH.UNAUTHORIZED_ACCESS);
+    }
     const result = await this.golfClubService.updateClubRoles({
       clubId: validated.params.clubId,
       managerIds: validated.body.managerIds,
       memberIds: validated.body.memberIds,
+      assignedByAdminId: adminUserId,
     });
     ApiResponse.success(res, result, "Club roles updated successfully");
   });
 
   assignManager = asyncHandler(async (req: Request, res: Response) => {
     const validated = await zParse(assignClubManagerSchema, req);
+    const adminUserId = req.user?.userId;
+    if (!adminUserId) {
+      throw new UnauthorizedException(MESSAGES.AUTH.UNAUTHORIZED_ACCESS);
+    }
     logger.info(
       {
         route: "assignManager",
@@ -96,6 +105,7 @@ export class GolfClubController {
       clubId: validated.params.clubId,
       golferUserId: validated.body.golferUserId,
       clubPassword: validated.body.clubPassword,
+      assignedByAdminId: adminUserId,
     });
 
     ApiResponse.success(res, result, "Club manager assigned successfully");
@@ -103,9 +113,14 @@ export class GolfClubController {
 
   addMember = asyncHandler(async (req: Request, res: Response) => {
     const validated = await zParse(addClubMemberSchema, req);
+    const adminUserId = req.user?.userId;
+    if (!adminUserId) {
+      throw new UnauthorizedException(MESSAGES.AUTH.UNAUTHORIZED_ACCESS);
+    }
     const result = await this.golfClubService.addMember({
       clubId: validated.params.clubId,
       golferUserId: validated.body.golferUserId,
+      assignedByAdminId: adminUserId,
     });
 
     ApiResponse.created(res, result, "Club member added successfully");

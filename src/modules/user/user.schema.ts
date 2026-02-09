@@ -1,6 +1,9 @@
 // file: src/modules/user/user.schema.ts
 
+import { ACCOUNT_STATUS } from "@/constants/app.constants";
 import { z } from "zod";
+
+const idSchema = z.string().min(1);
 
 const optionalTrimmedString = (options?: { min?: number; max?: number }) =>
   z.preprocess(
@@ -22,5 +25,20 @@ export const updateUserSchema = z.object({
     userName: optionalTrimmedString({ min: 2, max: 50 }),
     profileImageUrl: optionalTrimmedString({ max: 2048 }),
     coverImageUrl: optionalTrimmedString({ max: 2048 }),
+  }),
+});
+
+export const updateAccountStatusSchema = z.object({
+  params: z.object({
+    userId: idSchema,
+  }),
+  body: z.object({
+    accountStatus: z.nativeEnum(ACCOUNT_STATUS),
+  }),
+});
+
+export const userIdParamSchema = z.object({
+  params: z.object({
+    userId: idSchema,
   }),
 });

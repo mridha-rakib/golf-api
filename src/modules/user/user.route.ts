@@ -27,7 +27,7 @@ router.put(
 router.post(
   "/profile/image-upload",
   authMiddleware.verifyToken,
-  authMiddleware.authorize(ROLES.GOLFER),
+  authMiddleware.authorize(ROLES.GOLFER, ROLES.ADMIN, ROLES.GOLF_CLUB),
   upload.single("profileImage"),
   userController.uploadProfileImage,
 );
@@ -52,6 +52,20 @@ router.get(
   authMiddleware.verifyToken,
   authMiddleware.authorize(ROLES.GOLFER),
   userController.getFollowing,
+);
+
+router.patch(
+  "/:userId/status",
+  authMiddleware.verifyToken,
+  authMiddleware.authorize(ROLES.ADMIN),
+  userController.updateAccountStatus,
+);
+
+router.delete(
+  "/:userId",
+  authMiddleware.verifyToken,
+  authMiddleware.authorize(ROLES.ADMIN),
+  userController.deleteUser,
 );
 
 export default router;

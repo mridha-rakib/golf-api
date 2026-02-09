@@ -9,7 +9,11 @@ import {
 import { ApiResponse } from "@/utils/response.utils";
 import { zParse } from "@/utils/validators.utils";
 import type { Request, Response } from "express";
-import { updateUserSchema } from "./user.schema";
+import {
+  updateAccountStatusSchema,
+  updateUserSchema,
+  userIdParamSchema,
+} from "./user.schema";
 import { UserService } from "./user.service";
 
 export class UserController {
@@ -35,7 +39,7 @@ export class UserController {
       throw new UnauthorizedException(MESSAGES.AUTH.UNAUTHORIZED_ACCESS);
     }
 
-    if (req.user?.role !== ROLES.GOLFER) {
+    if (![ROLES.GOLFER, ROLES.ADMIN, ROLES.GOLF_CLUB].includes(req.user?.role as any)) {
       throw new UnauthorizedException(MESSAGES.AUTH.UNAUTHORIZED_ACCESS);
     }
 
@@ -88,7 +92,7 @@ export class UserController {
       throw new UnauthorizedException(MESSAGES.AUTH.UNAUTHORIZED_ACCESS);
     }
 
-    if (req.user?.role !== ROLES.GOLFER) {
+    if (![ROLES.GOLFER, ROLES.ADMIN, ROLES.GOLF_CLUB].includes(req.user?.role as any)) {
       throw new UnauthorizedException(MESSAGES.AUTH.UNAUTHORIZED_ACCESS);
     }
 
@@ -110,7 +114,7 @@ export class UserController {
       throw new UnauthorizedException(MESSAGES.AUTH.UNAUTHORIZED_ACCESS);
     }
 
-    if (req.user?.role !== ROLES.GOLFER) {
+    if (![ROLES.GOLFER, ROLES.ADMIN, ROLES.GOLF_CLUB].includes(req.user?.role as any)) {
       throw new UnauthorizedException(MESSAGES.AUTH.UNAUTHORIZED_ACCESS);
     }
 
@@ -152,5 +156,20 @@ export class UserController {
 
     const following = await this.userService.listFollowing(userId);
     ApiResponse.success(res, following, "Following fetched successfully");
+  });
+
+  updateAccountStatus = asyncHandler(async (req: Request, res: Response) => {
+    const validated = await zParse(updateAccountStatusSchema, req);
+    const updated = await this.userService.updateAccountStatus(
+      validated.params.userId,
+      validated.body.accountStatus,
+    );
+    ApiResponse.success(res, updated, "User status updated successfully");
+  });
+
+  deleteUser = asyncHandler(async (req: Request, res: Response) => {
+    const validated = await zParse(userIdParamSchema, req);
+    await this.userService.softDeleteUser(validated.params.userId);
+    ApiResponse.success(res, null, "User deleted successfully");
   });
 }

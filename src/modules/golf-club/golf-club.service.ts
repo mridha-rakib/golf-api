@@ -13,6 +13,7 @@ import type { IGolfClubRoleAssignment } from "./golf-club-role.interface";
 import { CLUB_ROLES } from "./golf-club-role.model";
 import type { IGolfClub, IGolfClubMember } from "./golf-club.interface";
 import { ChatService } from "../chat/chat.service";
+import { NotificationService } from "../notification/notification.service";
 import {
   GolfClubMemberRepository,
   GolfClubRepository,
@@ -42,6 +43,7 @@ export class GolfClubService {
   private userService: UserService;
   private emailService: EmailService;
   private chatService: ChatService;
+  private notificationService: NotificationService;
 
   constructor() {
     this.golfClubRepository = new GolfClubRepository();
@@ -50,6 +52,7 @@ export class GolfClubService {
     this.userService = new UserService();
     this.emailService = new EmailService();
     this.chatService = new ChatService();
+    this.notificationService = new NotificationService();
   }
 
   private resolveClubPassword(
@@ -112,6 +115,19 @@ export class GolfClubService {
       managerUserId: managerIds[0] ? new Types.ObjectId(managerIds[0]) : null,
       address: payload.address?.trim() ?? "",
     });
+
+    try {
+      await this.notificationService.notifyAdminClubCreated({
+        clubId: club._id.toString(),
+        clubName,
+        clubUserId: clubUser._id.toString(),
+      });
+    } catch (error) {
+      logger.warn(
+        { clubId: club._id.toString(), error },
+        "Failed to create admin notification for new club",
+      );
+    }
 
     // Persist manager role assignments
     if (managerIds.length > 0) {
@@ -270,8 +286,8 @@ export class GolfClubService {
       throw new NotFoundException("Golf club not found.");
     }
 
-    const managerIds = payload.managerIds ?? [];
-    const memberIds = payload.memberIds ?? [];
+    const managerIds = Array.from(new Set(payload.managerIds ?? []));
+    const memberIds = Array.from(new Set(payload.memberIds ?? []));
 
     const managerSet = new Set(managerIds);
     const memberSet = new Set(memberIds);
@@ -308,6 +324,11 @@ export class GolfClubService {
         .filter((a) => a.roles.includes(CLUB_ROLES.CLUB_MANAGER))
         .map((a) => a.golferUserId.toString()),
     );
+    const existingMemberIds = new Set(
+      existingAssignments
+        .filter((a) => a.roles.includes(CLUB_ROLES.CLUB_MEMBER))
+        .map((a) => a.golferUserId.toString()),
+    );
 
     await this.golfClubRoleRepository.deleteByClubId(payload.clubId);
 
@@ -335,6 +356,48 @@ export class GolfClubService {
         ? new Types.ObjectId(primaryManagerId)
         : null,
     });
+
+    if (payload.assignedByAdminId) {
+      const newManagerIds = managerIds.filter(
+        (id) => !existingManagerIds.has(id),
+      );
+      const newMemberIds = memberIds.filter(
+        (id) => !existingMemberIds.has(id),
+      );
+
+      const notifyRole = async (
+        golferId: string,
+        role: "member" | "manager",
+      ) => {
+        try {
+          await this.notificationService.notifyClubAssignment({
+            recipientUserId: golferId,
+            clubId: payload.clubId,
+            clubName: club.name,
+            assignedByAdminId: payload.assignedByAdminId!,
+            role,
+          });
+        } catch (error) {
+          logger.warn(
+            {
+              clubId: payload.clubId,
+              golferUserId: golferId,
+              role,
+              error,
+            },
+            "Failed to create club assignment notification",
+          );
+        }
+      };
+
+      for (const managerId of newManagerIds) {
+        await notifyRole(managerId, "manager");
+      }
+
+      for (const memberId of newMemberIds) {
+        await notifyRole(memberId, "member");
+      }
+    }
 
     // Send credential email to newly added managers
     if (managerIds.length > 0) {
@@ -566,6 +629,27 @@ export class GolfClubService {
       );
     }
 
+    if (payload.assignedByAdminId) {
+      try {
+        await this.notificationService.notifyClubAssignment({
+          recipientUserId: payload.golferUserId,
+          clubId: payload.clubId,
+          clubName: updatedClub.name,
+          assignedByAdminId: payload.assignedByAdminId,
+          role: "manager",
+        });
+      } catch (error) {
+        logger.warn(
+          {
+            clubId: payload.clubId,
+            golferUserId: payload.golferUserId,
+            error,
+          },
+          "Failed to create club manager assignment notification",
+        );
+      }
+    }
+
     return this.toGolfClubResponse(updatedClub, clubUser.email);
   }
 
@@ -613,6 +697,27 @@ export class GolfClubService {
         },
         "Failed to add club member to group chat threads",
       );
+    }
+
+    if (payload.assignedByAdminId) {
+      try {
+        await this.notificationService.notifyClubAssignment({
+          recipientUserId: payload.golferUserId,
+          clubId: payload.clubId,
+          clubName: club.name,
+          assignedByAdminId: payload.assignedByAdminId,
+          role: "member",
+        });
+      } catch (error) {
+        logger.warn(
+          {
+            clubId: payload.clubId,
+            golferUserId: payload.golferUserId,
+            error,
+          },
+          "Failed to create club member assignment notification",
+        );
+      }
     }
 
     return this.toGolfClubMemberResponse(member);

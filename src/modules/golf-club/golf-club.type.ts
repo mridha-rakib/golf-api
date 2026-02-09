@@ -12,11 +12,13 @@ export type AssignClubManagerPayload = {
   clubId: string;
   golferUserId: string;
   clubPassword?: string;
+  assignedByAdminId?: string;
 };
 
 export type AddClubMemberPayload = {
   clubId: string;
   golferUserId: string;
+  assignedByAdminId?: string;
 };
 
 export type GolfClubResponse = {
@@ -51,6 +53,7 @@ export type ClubRoleAssignmentPayload = {
   managerIds?: string[];
   memberIds?: string[];
   clubPassword?: string;
+  assignedByAdminId?: string;
 };
 
 export type ClubRolesResponse = {

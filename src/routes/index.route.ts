@@ -2,6 +2,7 @@ import authRouter from "@/modules/auth/auth.route";
 import golfClubClubRouter from "@/modules/golf-club/golf-club.club.route";
 import golfClubRouter from "@/modules/golf-club/golf-club.route";
 import chatRouter from "@/modules/chat/chat.route";
+import notificationRouter from "@/modules/notification/notification.route";
 import socialFeedRouter from "@/modules/social-feed/social-feed.route";
 import userRouter from "@/modules/user/user.route";
 
@@ -25,6 +26,10 @@ const moduleRoutes = [
   {
     path: "/chat",
     route: chatRouter,
+  },
+  {
+    path: "/notifications",
+    route: notificationRouter,
   },
   {
     path: "/social-feed",
