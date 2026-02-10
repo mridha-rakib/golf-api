@@ -43,7 +43,12 @@ export class SocialAccessService {
       throw new NotFoundException("User not found.");
     }
 
-    if (![ROLES.GOLFER, ROLES.GOLF_CLUB].includes(user.role)) {
+    const allowedRoles: Array<(typeof ROLES)[keyof typeof ROLES]> = [
+      ROLES.GOLFER,
+      ROLES.GOLF_CLUB,
+    ];
+
+    if (!allowedRoles.includes(user.role)) {
       throw new BadRequestException("User is not a golfer or golf club.");
     }
 
@@ -105,7 +110,7 @@ export class SocialAccessService {
       throw new NotFoundException("Post not found.");
     }
 
-    await this.getGolferOrFail(post.golferUserId.toString());
+    await this.getGolferOrClubOrFail(post.golferUserId.toString());
 
     return post;
   }

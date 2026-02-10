@@ -26,7 +26,7 @@ export type UserResponse = {
 };
 
 export type UserCreatePayload = {
-  email: string;
+  email?: string;
   password?: string;
   fullName: string;
   userName?: string;

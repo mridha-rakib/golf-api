@@ -2,7 +2,7 @@ import type { UserResponse } from "../user/user.type";
 
 export type CreateGolfClubPayload = {
   clubName: string;
-  email: string;
+  email?: string;
   password: string;
   address?: string;
   managerIds?: string[];

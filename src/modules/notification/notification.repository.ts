@@ -10,4 +10,29 @@ export class NotificationRepository extends BaseRepository<INotification> {
   async countByRecipient(recipientUserId: string): Promise<number> {
     return this.countDocuments({ recipientUserId });
   }
+
+  async countUnreadByRecipient(recipientUserId: string): Promise<number> {
+    return this.countDocuments({ recipientUserId, isRead: false });
+  }
+
+  async markReadByIdsForRecipient(
+    recipientUserId: string,
+    notificationIds: string[],
+  ): Promise<{ matchedCount: number; modifiedCount: number }> {
+    const result = await this.model.updateMany(
+      {
+        _id: { $in: notificationIds },
+        recipientUserId,
+        isRead: false,
+      },
+      {
+        $set: { isRead: true, readAt: new Date() },
+      },
+    );
+
+    return {
+      matchedCount: result.matchedCount ?? 0,
+      modifiedCount: result.modifiedCount ?? 0,
+    };
+  }
 }

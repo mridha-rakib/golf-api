@@ -17,6 +17,17 @@ export class GolfClubRepository extends BaseRepository<IGolfClub> {
     return this.model.findOne({ clubUserId }).exec();
   }
 
+  async findByIds(clubIds: string[]): Promise<IGolfClub[]> {
+    if (clubIds.length === 0) {
+      return [];
+    }
+    return this.model.find({ _id: { $in: clubIds } }).exec();
+  }
+
+  async findByManagerUserId(managerUserId: string): Promise<IGolfClub[]> {
+    return this.model.find({ managerUserId }).exec();
+  }
+
   async deleteByIdHard(clubId: string): Promise<number> {
     const result = await this.model.deleteOne({ _id: clubId }).exec();
     return result.deletedCount || 0;
@@ -51,6 +62,12 @@ export class GolfClubRoleRepository extends BaseRepository<IGolfClubRoleAssignme
       .find({ clubId })
       .sort({ updatedAt: -1 })
       .exec();
+  }
+
+  async findByGolferUserId(
+    golferUserId: string,
+  ): Promise<IGolfClubRoleAssignment[]> {
+    return this.model.find({ golferUserId }).exec();
   }
 
   async deleteByClubId(clubId: string): Promise<number> {

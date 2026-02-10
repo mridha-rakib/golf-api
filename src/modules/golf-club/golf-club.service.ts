@@ -68,6 +68,32 @@ export class GolfClubService {
     return password;
   }
 
+  private async generateUniqueClubUserName(
+    clubName: string,
+  ): Promise<string> {
+    const base =
+      clubName
+        .trim()
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, "_")
+        .replace(/^_+|_+$/g, "") || "club";
+    let candidate = base;
+    let suffix = 1;
+
+    while (await this.userService.isUserNameTaken(candidate)) {
+      suffix += 1;
+      candidate = `${base}_${suffix}`;
+      if (suffix > 50) {
+        candidate = `${base}_${Date.now().toString().slice(-6)}`;
+        if (!(await this.userService.isUserNameTaken(candidate))) {
+          break;
+        }
+      }
+    }
+
+    return candidate;
+  }
+
   async createGolfClub(
     payload: CreateGolfClubPayload,
     adminEmail: string,
@@ -75,6 +101,7 @@ export class GolfClubService {
     const clubName = payload.clubName.trim();
     const passwordToUse = payload.password.trim();
     const managerIds = Array.from(new Set(payload.managerIds || []));
+    const generatedUserName = await this.generateUniqueClubUserName(clubName);
 
     let managerMap = new Map<string, UserResponse>();
     if (managerIds.length > 0) {
@@ -101,6 +128,7 @@ export class GolfClubService {
       email: payload.email,
       password: passwordToUse,
       fullName: clubName,
+      userName: generatedUserName,
       role: ROLES.GOLF_CLUB,
       emailVerified: true,
       accountStatus: ACCOUNT_STATUS.ACTIVE,
@@ -160,24 +188,26 @@ export class GolfClubService {
       to: adminEmail,
       recipientRole: "Admin",
       clubName,
-      clubEmail: clubUser.email,
+      clubUserName: clubUser.userName ?? clubUser.fullName ?? clubName,
+      clubEmail: clubUser.email ?? undefined,
       clubPassword: passwordToUse,
     });
 
     // Notify each manager directly so they can log in immediately
     for (const managerId of managerIds) {
       const manager = managerMap.get(managerId)!;
-      await this.emailService.sendGolfClubCredentials({
-        to: manager.email,
-        recipientName: manager.fullName,
-        recipientRole: "Club Manager",
-        clubName,
-        clubEmail: clubUser.email,
-        clubPassword: passwordToUse,
-      });
+        await this.emailService.sendGolfClubCredentials({
+          to: manager.email,
+          recipientName: manager.fullName,
+          recipientRole: "Club Manager",
+          clubName,
+          clubUserName: clubUser.userName ?? clubUser.fullName ?? clubName,
+          clubEmail: clubUser.email ?? undefined,
+          clubPassword: passwordToUse,
+        });
     }
 
-    return this.toGolfClubResponse(club, clubUser.email);
+    return this.toGolfClubResponse(club, clubUser.email ?? "");
   }
 
   async listGolfers(): Promise<UserResponse[]> {
@@ -201,6 +231,58 @@ export class GolfClubService {
 
     const clubRoleCounts = await this.golfClubRoleRepository.countByClubIds(
       clubs.map((club) => club._id.toString()),
+    );
+
+    return clubs.map((club) =>
+      this.toGolfClubResponse(
+        club,
+        clubUserMap.get(club.clubUserId.toString()) ?? "",
+        clubRoleCounts.get(club._id.toString()) ?? 0,
+      ),
+    );
+  }
+
+  async listClubsForGolfer(golferUserId: string): Promise<GolfClubResponse[]> {
+    const golfer = await this.userService.getById(golferUserId);
+    if (!golfer || golfer.role !== ROLES.GOLFER) {
+      throw new BadRequestException("User is not a golfer.");
+    }
+
+    const [roleAssignments, memberRecords, managerClubs] = await Promise.all([
+      this.golfClubRoleRepository.findByGolferUserId(golferUserId),
+      this.golfClubMemberRepository.find({ golferUserId } as any),
+      this.golfClubRepository.findByManagerUserId(golferUserId),
+    ]);
+
+    const clubIds = new Set<string>();
+    roleAssignments.forEach((assignment) =>
+      clubIds.add(assignment.clubId.toString()),
+    );
+    memberRecords.forEach((member) =>
+      clubIds.add(member.clubId.toString()),
+    );
+    managerClubs.forEach((club) => clubIds.add(club._id.toString()));
+
+    const ids = Array.from(clubIds);
+    if (ids.length === 0) {
+      return [];
+    }
+
+    const clubs = await this.golfClubRepository.findByIds(ids);
+    if (clubs.length === 0) {
+      return [];
+    }
+
+    const clubUserIds = Array.from(
+      new Set(clubs.map((club) => club.clubUserId.toString())),
+    );
+    const clubUsers = await this.userService.getUsersByIds(clubUserIds);
+    const clubUserMap = new Map(
+      clubUsers.map((user) => [user._id.toString(), user.email]),
+    );
+
+    const clubRoleCounts = await this.golfClubRoleRepository.countByClubIds(
+      ids,
     );
 
     return clubs.map((club) =>
@@ -413,13 +495,22 @@ export class GolfClubService {
           if (existingManagerIds.has(managerId)) continue;
           const mgr = golferMap.get(managerId);
           if (!mgr) continue;
+          const managerEmail = (mgr.email || "").trim();
+          if (!managerEmail) {
+            logger.warn(
+              { clubId: payload.clubId, golferId: managerId },
+              "Skipping club manager credential email because golfer email is missing",
+            );
+            continue;
+          }
           try {
             await this.emailService.sendGolfClubCredentials({
-              to: mgr.email,
+              to: managerEmail,
               recipientName: mgr.fullName,
               recipientRole: "Club Manager",
               clubName: club.name,
-              clubEmail: clubUser.email,
+              clubUserName: clubUser.userName ?? clubUser.fullName ?? club.name,
+              clubEmail: clubUser.email ?? undefined,
               clubPassword,
             });
             logger.info(
@@ -596,14 +687,20 @@ export class GolfClubService {
       "Assigning manager to club",
     );
 
+    const golferEmail = (golfer.email || "").trim();
+    if (!golferEmail) {
+      throw new BadRequestException("Selected golfer does not have an email.");
+    }
+
     // Send credentials (with optional explicit password provided in request)
     try {
       await this.emailService.sendGolfClubCredentials({
-        to: golfer.email,
+        to: golferEmail,
         recipientName: golfer.fullName,
         recipientRole: "Club Manager",
         clubName: updatedClub.name,
-        clubEmail: clubUser.email,
+        clubUserName: clubUser.userName ?? clubUser.fullName ?? updatedClub.name,
+        clubEmail: clubUser.email ?? undefined,
         clubPassword,
       });
       logger.info(
@@ -650,7 +747,7 @@ export class GolfClubService {
       }
     }
 
-    return this.toGolfClubResponse(updatedClub, clubUser.email);
+    return this.toGolfClubResponse(updatedClub, clubUser.email ?? "");
   }
 
   async addMember(

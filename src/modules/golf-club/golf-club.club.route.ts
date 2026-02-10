@@ -13,4 +13,11 @@ router.get(
   controller.getMyClubRoles,
 );
 
+router.get(
+  "/my-clubs",
+  authMiddleware.verifyToken,
+  authMiddleware.authorize(ROLES.GOLFER),
+  controller.listMyClubs,
+);
+
 export default router;

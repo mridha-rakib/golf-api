@@ -1,6 +1,7 @@
 import { BaseRepository } from "@/modules/base/base.repository";
 import type { IChatMessage, IChatThread } from "./chat.interface";
 import { ChatMessage, ChatThread } from "./chat.model";
+import type { ChatThreadType } from "./chat.interface";
 
 export class ChatThreadRepository extends BaseRepository<IChatThread> {
   private static typeIndexChecked = false;
@@ -24,6 +25,16 @@ export class ChatThreadRepository extends BaseRepository<IChatThread> {
   async findThreadsForUser(userId: string): Promise<IChatThread[]> {
     return this.model
       .find({ memberUserIds: userId })
+      .sort({ updatedAt: -1 })
+      .exec();
+  }
+
+  async findThreadsForUserByType(
+    userId: string,
+    type: ChatThreadType,
+  ): Promise<IChatThread[]> {
+    return this.model
+      .find({ memberUserIds: userId, type })
       .sort({ updatedAt: -1 })
       .exec();
   }
@@ -87,6 +98,16 @@ export class ChatThreadRepository extends BaseRepository<IChatThread> {
     return this.model.find({ type: "group", ownerUserId }).exec();
   }
 
+  async findGroupThreadsForUserByClub(
+    userId: string,
+    clubId: string,
+  ): Promise<IChatThread[]> {
+    return this.model
+      .find({ type: "group", clubId, memberUserIds: userId })
+      .sort({ updatedAt: -1 })
+      .exec();
+  }
+
   async removeMember(
     threadId: string,
     memberId: string,
@@ -119,5 +140,41 @@ export class ChatMessageRepository extends BaseRepository<IChatMessage> {
 
   async findLastByThread(threadId: string): Promise<IChatMessage | null> {
     return this.model.findOne({ threadId }).sort({ createdAt: -1 }).exec();
+  }
+
+  async upsertReaction(
+    messageId: string,
+    payload: { userId: import("mongoose").Types.ObjectId; emoji: string; reactedAt?: Date },
+  ): Promise<IChatMessage | null> {
+    const reactedAt = payload.reactedAt ?? new Date();
+    return this.model
+      .findByIdAndUpdate(
+        messageId,
+        {
+          $pull: { reactions: { userId: payload.userId } },
+          $push: {
+            reactions: {
+              userId: payload.userId,
+              emoji: payload.emoji,
+              reactedAt,
+            },
+          },
+        },
+        { new: true },
+      )
+      .exec();
+  }
+
+  async removeReaction(
+    messageId: string,
+    userId: import("mongoose").Types.ObjectId,
+  ): Promise<IChatMessage | null> {
+    return this.model
+      .findByIdAndUpdate(
+        messageId,
+        { $pull: { reactions: { userId } } },
+        { new: true },
+      )
+      .exec();
   }
 }

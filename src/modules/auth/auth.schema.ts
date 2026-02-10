@@ -15,10 +15,30 @@ export const registerSchema = z.object({
 });
 
 export const loginSchema = z.object({
-  body: z.object({
-    email: z.string().email(MESSAGES.VALIDATION.INVALID_EMAIL),
-    password: z.string().min(1, "Password is required"),
-  }),
+  body: z.preprocess(
+    (value) => {
+      if (!value || typeof value !== "object") return value;
+      const body = value as Record<string, unknown>;
+
+      const pick = (v: unknown) =>
+        typeof v === "string" && v.trim().length > 0 ? v.trim() : undefined;
+
+      // Backward/forward compatible: accept email OR username OR identifier.
+      const identifier =
+        pick(body.email) ?? pick(body.username) ?? pick(body.identifier);
+
+      if (!identifier) return body;
+
+      return {
+        ...body,
+        email: identifier,
+      };
+    },
+    z.object({
+      email: z.string().min(1, "Email or username is required"),
+      password: z.string().min(1, "Password is required"),
+    }),
+  ),
 });
 
 export const verifyEmailSchema = z.object({

@@ -9,6 +9,7 @@ export type NotificationType =
   | "DAILY_SUMMARY";
 
 export interface INotification extends Document {
+  _id: Types.ObjectId;
   recipientUserId: Types.ObjectId;
   actorUserId?: Types.ObjectId | null;
   type: NotificationType;

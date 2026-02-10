@@ -3,7 +3,7 @@ import type { Document, Types } from "mongoose";
 
 export interface IUser extends Document {
   _id: Types.ObjectId;
-  email: string;
+  email?: string | null;
   password?: string;
   phoneNumber?: string;
   address: string;

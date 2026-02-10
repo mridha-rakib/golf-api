@@ -4,6 +4,7 @@ export type ChatThreadType = "direct" | "group";
 
 export interface IChatThread extends Document {
   type: ChatThreadType;
+  clubId?: Types.ObjectId | null;
   memberUserIds: Types.ObjectId[];
   ownerUserId?: Types.ObjectId | null;
   name?: string | null;
@@ -21,6 +22,12 @@ export interface IChatMessage extends Document {
   type: ChatMessageType;
   text?: string | null;
   imageUrl?: string | null;
+  mentionedUserIds?: Types.ObjectId[];
+  reactions?: Array<{
+    userId: Types.ObjectId;
+    emoji: string;
+    reactedAt: Date;
+  }>;
   createdAt: Date;
   updatedAt: Date;
 }

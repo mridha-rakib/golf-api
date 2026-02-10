@@ -1,4 +1,5 @@
 import { UserService } from "@/modules/user/user.service";
+import { ROLES } from "@/constants/app.constants";
 import {
   BadRequestException,
   NotFoundException,
@@ -128,9 +129,14 @@ export class SocialPostService {
     options: { skipAccessCheck?: boolean } = {},
   ): Promise<SocialFeedPostResponse[]> {
     if (options.skipAccessCheck) {
-      await this.accessService.getGolferOrFail(golferUserId);
+      await this.accessService.getGolferOrClubOrFail(golferUserId);
     } else {
-      await this.accessService.assertCanViewGolfer(viewerUserId, golferUserId);
+      const isOwner = viewerUserId === golferUserId;
+      if (isOwner) {
+        await this.accessService.getGolferOrClubOrFail(golferUserId);
+      } else {
+        await this.accessService.assertCanViewGolfer(viewerUserId, golferUserId);
+      }
     }
     const posts = await this.postRepository.findByGolferUserId(golferUserId);
 
@@ -181,10 +187,19 @@ export class SocialPostService {
     viewerUserId: string,
     page: number,
     limit: number,
+    viewerRole?: string,
   ): Promise<{ posts: SocialFeedPostResponse[]; total: number }> {
+    let golferUserIds: string[] = [];
+    if (viewerRole === ROLES.GOLFER) {
+      const followingIds = await this.accessService.listFollowingIds(
+        viewerUserId,
+      );
+      golferUserIds = Array.from(new Set([viewerUserId, ...followingIds]));
+    }
+
     const [posts, total] = await Promise.all([
-      this.postRepository.findFeedPosts([], page, limit),
-      this.postRepository.countFeedPosts([]),
+      this.postRepository.findFeedPosts(golferUserIds, page, limit),
+      this.postRepository.countFeedPosts(golferUserIds),
     ]);
 
     const baseResponses = await Promise.all(

@@ -4,6 +4,7 @@ import type { ChatMessageType, ChatThreadType } from "./chat.interface";
 export type ChatThreadSummary = {
   _id: string;
   type: ChatThreadType;
+  clubId?: string | null;
   name?: string | null;
   avatarUrl?: string | null;
   ownerUserId?: string | null;
@@ -22,6 +23,12 @@ export type ChatMessageResponse = {
   type: ChatMessageType;
   text?: string | null;
   imageUrl?: string | null;
+  mentionedUserIds?: string[];
+  reactions?: Array<{
+    userId: string;
+    emoji: string;
+    reactedAt: Date;
+  }>;
   createdAt: Date;
   updatedAt: Date;
   sender?: UserResponse | null;
@@ -56,6 +63,11 @@ export type SendThreadMessagePayload = {
 
 export type CreateGroupPayload = {
   name: string;
+  clubId?: string;
   avatarUrl?: string;
   memberUserIds?: string[];
+};
+
+export type ReactToMessagePayload = {
+  emoji: string;
 };

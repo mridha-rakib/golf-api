@@ -20,6 +20,12 @@ type SendMessagePayload = {
   tempId?: string; // optional client-generated id for optimistic UI
 };
 
+type ReactMessagePayload = {
+  messageId?: string;
+  emoji?: string;
+  convId?: string;
+};
+
 type OutgoingMessage = {
   id: string;
   convId: string;
@@ -27,6 +33,8 @@ type OutgoingMessage = {
   mediaUrls: string[];
   senderId: string;
   sender?: UserResponse | null;
+  mentionedUserIds?: string[];
+  reactions?: Array<{ userId: string; emoji: string; reactedAt: Date }>;
   sentAt: string;
   tempId?: string;
 };
@@ -126,6 +134,8 @@ export class SocketService {
                   mediaUrls: mediaUrls,
                   senderId: socket.userId!,
                   sender: message.sender ?? null,
+                  mentionedUserIds: message.mentionedUserIds ?? [],
+                  reactions: message.reactions ?? [],
                   sentAt: message.createdAt.toISOString
                     ? message.createdAt.toISOString()
                     : new Date().toISOString(),
@@ -142,6 +152,41 @@ export class SocketService {
               });
           } catch (err: any) {
             cb?.({ ok: false, error: err.message ?? "Failed to send message" });
+          }
+        },
+      );
+
+      socket.on(
+        "react-msg",
+        (payload: ReactMessagePayload, cb?: (resp: any) => void) => {
+          try {
+            const messageId = payload?.messageId?.trim();
+            const emoji = payload?.emoji?.trim() ?? "";
+
+            if (!messageId) throw new Error("messageId is required");
+            if (!emoji) throw new Error("emoji is required");
+
+            this.chatService
+              .reactToMessage(socket.userId!, messageId, emoji)
+              .then(({ action, message }) => {
+                const convId = message.threadId;
+                const outgoing = {
+                  action,
+                  messageId: message._id,
+                  convId,
+                  reactions: message.reactions ?? [],
+                };
+                this.io.to(roomName(convId)).emit("msg-reacted", outgoing);
+                cb?.({ ok: true, data: outgoing });
+              })
+              .catch((err) => {
+                cb?.({
+                  ok: false,
+                  error: err?.message ?? "Failed to react to message",
+                });
+              });
+          } catch (err: any) {
+            cb?.({ ok: false, error: err.message ?? "Failed to react" });
           }
         },
       );

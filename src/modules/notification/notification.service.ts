@@ -60,16 +60,31 @@ export class NotificationService {
     followerUserId: string,
     followingUserId: string,
   ): Promise<void> {
-    const actor = await this.userService.getProfile(followerUserId);
-    const actorName = actor.fullName || actor.email;
-    const message = `${actorName} started following you.`;
+    const [actor, target] = await Promise.all([
+      this.userService.getProfile(followerUserId),
+      this.userService.getProfile(followingUserId),
+    ]);
 
-    await this.createNotification({
-      recipientUserId: followingUserId,
-      actorUserId: followerUserId,
-      type: "FOLLOW",
-      message,
-    });
+    const actorName = actor.fullName || actor.email;
+    const targetName = target.fullName || target.email;
+
+    const messageForTarget = `${actorName} started following you.`;
+    const messageForActor = `You started following ${targetName}.`;
+
+    await Promise.all([
+      this.createNotification({
+        recipientUserId: followingUserId,
+        actorUserId: followerUserId,
+        type: "FOLLOW",
+        message: messageForTarget,
+      }),
+      this.createNotification({
+        recipientUserId: followerUserId,
+        actorUserId: followingUserId,
+        type: "FOLLOW",
+        message: messageForActor,
+      }),
+    ]);
   }
 
   async notifyClubAssignment(payload: {
@@ -222,5 +237,40 @@ export class NotificationService {
     });
 
     return PaginationHelper.buildResponse(data, total, page, limit);
+  }
+
+  async getUnreadCount(userId: string): Promise<number> {
+    return this.repository.countUnreadByRecipient(userId);
+  }
+
+  async markReadForUser(
+    userId: string,
+    payload: {
+      notificationId?: string;
+      notificationIds?: string[];
+      countOnly?: boolean;
+    },
+  ): Promise<{ updatedCount: number; unreadCount: number }> {
+    const ids = [
+      payload.notificationId,
+      ...(payload.notificationIds ?? []),
+    ].filter((id): id is string => Boolean(id));
+    const uniqueIds = Array.from(new Set(ids));
+
+    if (payload.countOnly || uniqueIds.length === 0) {
+      const unreadCount = await this.getUnreadCount(userId);
+      return { updatedCount: 0, unreadCount };
+    }
+
+    const result = await this.repository.markReadByIdsForRecipient(
+      userId,
+      uniqueIds,
+    );
+    const unreadCount = await this.getUnreadCount(userId);
+
+    return {
+      updatedCount: result.modifiedCount ?? result.matchedCount ?? 0,
+      unreadCount,
+    };
   }
 }

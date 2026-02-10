@@ -52,8 +52,9 @@ export class AuthService {
    * Login user (All roles: Admin, Golf club, Golfer)
    */
   async login(payload: LoginPayload): Promise<AuthServiceResponse> {
-    const user = await this.userService.getUserByEmailWithPassword(
-      payload.email
+    const identifier = payload.email?.trim();
+    const user = await this.userService.getUserByEmailOrUserNameWithPassword(
+      identifier
     );
 
     if (!user) {
@@ -113,12 +114,13 @@ export class AuthService {
       emailVerified: false,
       accountStatus: ACCOUNT_STATUS.PENDING,
     });
+    const userEmail = user.email ?? payload.email;
 
     try {
       await this.notificationService.notifyAdminNewUser({
         userId: user._id.toString(),
         name: user.fullName,
-        email: user.email,
+        email: userEmail,
         role: user.role,
       });
     } catch (error) {
@@ -130,7 +132,7 @@ export class AuthService {
 
     const verification = await this.emailVerificationService.createOTP({
       userId: user._id.toString(),
-      email: user.email,
+      email: userEmail,
       userType: user.role as UserType,
       userName: user.fullName,
     });
@@ -166,7 +168,7 @@ export class AuthService {
     );
 
     await this.emailService.sendWelcomeEmail({
-      to: user.email,
+      to: payload.email,
       userName: user.fullName,
       userType: result.userType,
       loginLink: `${env.CLIENT_URL}/login`,
@@ -193,12 +195,12 @@ export class AuthService {
     // Step 2: Generate OTP using password reset service
     const result = await this.passwordResetService.requestPasswordReset(
       user._id.toString(),
-      user.email,
+      email,
       user.fullName
     );
 
     logger.info(
-      { userId: user._id, email: user.email },
+      { userId: user._id, email },
       "Password reset requested"
     );
 
@@ -277,7 +279,7 @@ export class AuthService {
     // Step 7: Send security notification email
     await this.emailService.sendPasswordResetConfirmation(
       user.fullName,
-      user.email
+      email
     );
 
     logger.info(
@@ -312,7 +314,7 @@ export class AuthService {
 
     const result = await this.passwordResetService.requestPasswordReset(
       user._id.toString(),
-      user.email,
+      email,
       user.fullName
     );
 
@@ -350,7 +352,7 @@ export class AuthService {
 
       const accessToken = AuthUtil.generateAccessToken({
         userId: user._id.toString(),
-        email: user.email,
+        email: user.email ?? "",
         role: user.role,
         accountStatus: user.accountStatus,
         emailVerified: user.emailVerified,
@@ -372,7 +374,7 @@ export class AuthService {
   } {
     const accessToken = AuthUtil.generateAccessToken({
       userId: user._id.toString(),
-      email: user.email,
+      email: user.email ?? "",
       role: user.role,
       accountStatus: user.accountStatus,
       emailVerified: user.emailVerified,
@@ -491,13 +493,18 @@ export class AuthService {
     await this.userService.invalidateAllRefreshTokens(userId);
 
     // Step 6: Send password change confirmation email
-    await this.userService.notifyPasswordChange(
-      user.email,
-      user.fullName,
-      new Date()
-    );
+    if (user.email) {
+      await this.userService.notifyPasswordChange(
+        user.email,
+        user.fullName,
+        new Date()
+      );
+    }
 
-    logger.info({ userId, email: user.email }, "Password changed successfully");
+    logger.info(
+      { userId, email: user.email ?? "" },
+      "Password changed successfully"
+    );
 
     return {
       message:

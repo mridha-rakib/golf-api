@@ -1,6 +1,6 @@
 // file: src/modules/user/user.repository.ts
 
-import { ACCOUNT_STATUS } from "@/constants/app.constants";
+import { ACCOUNT_STATUS, ROLES } from "@/constants/app.constants";
 import { logger } from "@/middlewares/pino-logger";
 import { BaseRepository } from "@/modules/base/base.repository";
 import type { IUser } from "./user.interface";
@@ -14,15 +14,27 @@ export class UserRepository extends BaseRepository<IUser> {
     super(User);
   }
 
+  private escapeRegExp(value: string) {
+    return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  }
+
   async findByEmail(email: string): Promise<IUser | null> {
+    if (!email) {
+      return null;
+    }
+    const normalized = email.toLowerCase();
     return this.model
-      .findOne({ email: email.toLowerCase(), isDeleted: false })
+      .findOne({ email: normalized, isDeleted: false })
       .exec();
   }
 
   async findByEmailWithPassword(email: string): Promise<IUser | null> {
+    if (!email) {
+      return null;
+    }
+    const normalized = email.toLowerCase();
     return this.model
-      .findOne({ email: email.toLowerCase(), isDeleted: false })
+      .findOne({ email: normalized, isDeleted: false })
       .select("+password")
       .exec();
   }
@@ -30,6 +42,55 @@ export class UserRepository extends BaseRepository<IUser> {
   async findByUserName(userName: string): Promise<IUser | null> {
     return this.model
       .findOne({ userName, isDeleted: false })
+      .exec();
+  }
+
+  async findGolfersByMentionHandles(handles: string[]): Promise<IUser[]> {
+    const normalized = Array.from(
+      new Set(
+        (handles ?? [])
+          .map((h) => (typeof h === "string" ? h.trim() : ""))
+          .filter(Boolean)
+          .slice(0, 25),
+      ),
+    );
+
+    if (normalized.length === 0) {
+      return [];
+    }
+
+    const patterns = normalized.map((handle) => {
+      const safe = this.escapeRegExp(handle);
+      return new RegExp(`^@?${safe}$`, "i");
+    });
+
+    return this.model
+      .find({
+        role: ROLES.GOLFER,
+        isDeleted: false,
+        userName: { $in: patterns },
+      })
+      .exec();
+  }
+
+  async findByEmailOrUserNameWithPassword(
+    identifier: string,
+  ): Promise<IUser | null> {
+    if (!identifier) return null;
+    const trimmed = identifier.trim();
+    if (!trimmed) return null;
+    const normalized = trimmed.toLowerCase();
+
+    return this.model
+      .findOne({
+        isDeleted: false,
+        $or: [
+          { email: normalized },
+          { userName: trimmed },
+          { userName: normalized },
+        ],
+      })
+      .select("+password")
       .exec();
   }
 

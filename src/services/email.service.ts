@@ -39,7 +39,8 @@ type ClubCredentialsEmailPayload = {
   recipientName?: string;
   recipientRole: string;
   clubName: string;
-  clubEmail: string;
+  clubUserName: string;
+  clubEmail?: string;
   clubPassword?: string;
 };
 
@@ -140,6 +141,7 @@ export class EmailService {
   ): Promise<void> {
     const subject = `${APP.NAME} golf club credentials`;
     const recipientName = payload.recipientName || "there";
+    const clubEmail = (payload.clubEmail || "").trim();
     const passwordLine = payload.clubPassword
       ? `Password: <strong>${this.safeText(payload.clubPassword)}</strong>`
       : `Password: <strong>(use the club password provided by your admin)</strong>`;
@@ -148,8 +150,18 @@ export class EmailService {
       <p>${this.safeText(payload.recipientRole)} access has been created for ${this.safeText(
         payload.clubName
       )}.</p>
-      <p>Login email: <strong>${this.safeText(payload.clubEmail)}</strong></p>
+      <p>Club username: <strong>${this.safeText(payload.clubUserName)}</strong></p>
+      ${
+        clubEmail
+          ? `<p>Club email: <strong>${this.safeText(clubEmail)}</strong></p>`
+          : ""
+      }
       <p>${passwordLine}</p>
+      <p>
+        You can log in using ${
+          clubEmail ? "either the club username or club email" : "the club username"
+        }.
+      </p>
       <p>Please keep these credentials secure.</p>
     `);
 

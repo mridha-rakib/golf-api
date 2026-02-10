@@ -283,7 +283,12 @@ export class SocialFeedController {
     const { page = 1, limit = 10 } = PaginationHelper.parsePaginationParams(
       req.query,
     );
-    const result = await this.postService.listFeedPosts(userId, page, limit);
+    const result = await this.postService.listFeedPosts(
+      userId,
+      page,
+      limit,
+      req.user?.role,
+    );
     const feed = await this.enrichPostsWithDetails(userId, result.posts);
     const response = PaginationHelper.buildResponse(
       feed,

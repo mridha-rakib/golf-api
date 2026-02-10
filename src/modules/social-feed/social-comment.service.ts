@@ -81,7 +81,11 @@ export class SocialCommentService {
     viewerUserId: string,
     golferUserId: string
   ): Promise<SocialPostCommentsGroup[]> {
-    await this.accessService.assertCanViewGolfer(viewerUserId, golferUserId);
+    if (viewerUserId === golferUserId) {
+      await this.accessService.getGolferOrClubOrFail(golferUserId);
+    } else {
+      await this.accessService.assertCanViewGolfer(viewerUserId, golferUserId);
+    }
 
     const posts = await this.postRepository.findByGolferUserId(golferUserId);
     const postIds = posts.map((post) => post._id.toString());

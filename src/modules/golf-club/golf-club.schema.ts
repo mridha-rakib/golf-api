@@ -4,7 +4,13 @@ import { z } from "zod";
 export const createGolfClubSchema = z.object({
   body: z.object({
     clubName: z.string().min(2).max(100),
-    email: z.string().email(MESSAGES.VALIDATION.INVALID_EMAIL),
+    email: z
+      .preprocess((value) => {
+        if (typeof value !== "string") return value;
+        const trimmed = value.trim();
+        return trimmed.length === 0 ? undefined : trimmed;
+      }, z.string().email(MESSAGES.VALIDATION.INVALID_EMAIL).optional())
+      .optional(),
     password: z.string().min(8, "Password must be at least 8 characters"),
     address: z.string().trim().max(250).optional(),
     managerIds: z.array(z.string().min(1)).optional(),

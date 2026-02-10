@@ -13,7 +13,7 @@ import {
 import { Types } from "mongoose";
 import { SocialFollowRepository } from "../social-feed/social-feed.repository";
 import { UserService } from "../user/user.service";
-import type { IChatMessage, IChatThread } from "./chat.interface";
+import type { ChatThreadType, IChatMessage, IChatThread } from "./chat.interface";
 import { ChatMessageRepository, ChatThreadRepository } from "./chat.repository";
 import type {
   ChatMessageResponse,
@@ -43,6 +43,38 @@ export class ChatService {
     this.golfClubRepository = new GolfClubRepository();
     this.golfClubRoleRepository = new GolfClubRoleRepository();
     this.golfClubMemberRepository = new GolfClubMemberRepository();
+  }
+
+  private extractMentionHandles(text: string): string[] {
+    const unique = new Set<string>();
+    const raw = (text ?? "").trim();
+    if (!raw) return [];
+
+    // Match @username where @ is preceded by start or a non-word char to avoid emails like test@example.com.
+    const mentionRegex = /(^|[^\w])@([A-Za-z0-9_.-]{1,50})/g;
+    let match: RegExpExecArray | null = null;
+
+    while ((match = mentionRegex.exec(raw)) !== null) {
+      const handle = (match[2] || "").trim();
+      if (!handle) continue;
+      unique.add(handle);
+      if (unique.size >= 25) break;
+    }
+
+    return Array.from(unique);
+  }
+
+  private async resolveMentionedUserIds(
+    text: string | undefined,
+    allowedUserIdSet: Set<string>,
+  ): Promise<Types.ObjectId[]> {
+    const handles = this.extractMentionHandles(text ?? "");
+    if (handles.length === 0) return [];
+
+    const golfers = await this.userService.findGolfersByMentionHandles(handles);
+    return golfers
+      .filter((golfer) => allowedUserIdSet.has(golfer._id.toString()))
+      .map((golfer) => golfer._id);
   }
 
   private async assertCanDm(senderUserId: string, targetUserId: string) {
@@ -84,6 +116,7 @@ export class ChatService {
 
   private async resolveClubMembers(clubUserId: string): Promise<{
     clubName: string;
+    clubId: string;
     memberUserIds: string[];
   }> {
     const club = await this.golfClubRepository.findByClubUserId(clubUserId);
@@ -119,7 +152,39 @@ export class ChatService {
       ]),
     );
 
-    return { clubName: club.name, memberUserIds };
+    return { clubName: club.name, clubId: club._id.toString(), memberUserIds };
+  }
+
+  private async assertGolferInClub(
+    clubId: string,
+    golferUserId: string,
+  ): Promise<{ clubName: string; clubUserId: string }> {
+    const club = await this.golfClubRepository.findById(clubId);
+    if (!club) {
+      throw new NotFoundException("Golf club not found.");
+    }
+
+    const managerId = club.managerUserId?.toString();
+    if (managerId && managerId === golferUserId) {
+      return { clubName: club.name, clubUserId: club.clubUserId.toString() };
+    }
+
+    const [assignment, member] = await Promise.all([
+      this.golfClubRoleRepository.findOne({
+        clubId: club._id,
+        golferUserId,
+      } as any),
+      this.golfClubMemberRepository.findByClubAndGolfer(
+        clubId,
+        golferUserId,
+      ),
+    ]);
+
+    if (!assignment && !member) {
+      throw new ForbiddenException("You are not a member of this club.");
+    }
+
+    return { clubName: club.name, clubUserId: club.clubUserId.toString() };
   }
 
   private async ensureGroupThreadIndexes() {
@@ -244,12 +309,19 @@ export class ChatService {
       } as any);
     }
 
+    const allowedMentionUsers = new Set([senderUserId, payload.toGolferUserId]);
+    const mentionedUserIds = await this.resolveMentionedUserIds(
+      payload.text,
+      allowedMentionUsers,
+    );
+
     const message = await this.messageRepo.create({
       threadId: thread._id,
       senderUserId,
       type: payload.type,
       text: payload.text,
       imageUrl: payload.imageUrl,
+      mentionedUserIds,
     } as any);
     await this.threadRepo.touch((thread._id as any).toString());
 
@@ -301,12 +373,19 @@ export class ChatService {
 
     this.validateMessagePayload(payload.type, payload.text, payload.imageUrl);
 
+    const allowedMentionUsers = new Set(thread.memberUserIds.map(String));
+    const mentionedUserIds = await this.resolveMentionedUserIds(
+      payload.text,
+      allowedMentionUsers,
+    );
+
     const message = await this.messageRepo.create({
       threadId: thread._id,
       senderUserId,
       type: payload.type,
       text: payload.text,
       imageUrl: payload.imageUrl,
+      mentionedUserIds,
     } as any);
     await this.threadRepo.touch((thread._id as any).toString());
 
@@ -345,12 +424,19 @@ export class ChatService {
 
     this.validateMessagePayload(payload.type, payload.text, payload.imageUrl);
 
+    const allowedMentionUsers = new Set(thread.memberUserIds.map(String));
+    const mentionedUserIds = await this.resolveMentionedUserIds(
+      payload.text,
+      allowedMentionUsers,
+    );
+
     const message = await this.messageRepo.create({
       threadId: thread._id,
       senderUserId,
       type: payload.type,
       text: payload.text,
       imageUrl: payload.imageUrl,
+      mentionedUserIds,
     } as any);
     await this.threadRepo.touch((thread._id as any).toString());
 
@@ -381,9 +467,14 @@ export class ChatService {
     await this.ensureGroupThreadIndexes();
 
     if (owner.role === ROLES.GOLF_CLUB) {
-      const { clubName, memberUserIds } =
+      const { clubName, clubId, memberUserIds } =
         await this.resolveClubMembers(ownerUserId);
-      const members = Array.from(new Set([ownerUserId, ...memberUserIds]));
+      const requested = Array.from(new Set(payload.memberUserIds ?? []));
+      const allowed = new Set(memberUserIds);
+      const filteredRequested = requested.filter((id) => allowed.has(id));
+      const members = Array.from(
+        new Set([ownerUserId, ...(filteredRequested.length > 0 ? filteredRequested : memberUserIds)]),
+      );
 
       const thread = await this.threadRepo.create({
         type: "group",
@@ -391,12 +482,32 @@ export class ChatService {
         avatarUrl: payload.avatarUrl,
         ownerUserId,
         memberUserIds: members,
+        clubId: new Types.ObjectId(clubId),
       } as any);
 
       return this.toThreadSummary(thread, null, ownerUserId);
     }
 
+    if (!payload.clubId) {
+      throw new BadRequestException("Club id is required for group chats.");
+    }
+
+    const { clubName, clubUserId } = await this.assertGolferInClub(
+      payload.clubId,
+      ownerUserId,
+    );
+
+    const { memberUserIds: clubMembers } =
+      await this.resolveClubMembers(clubUserId);
+    const allowed = new Set(clubMembers);
+
     const requested = Array.from(new Set(payload.memberUserIds ?? []));
+    const invalidMembers = requested.filter((id) => !allowed.has(id));
+    if (invalidMembers.length > 0) {
+      throw new ForbiddenException(
+        "You can only add golfers from the same club.",
+      );
+    }
 
     const followingIds = await this.followRepo.findFollowingIds(ownerUserId);
     const invalid = requested.filter((id) => !followingIds.includes(id));
@@ -415,10 +526,11 @@ export class ChatService {
 
     const thread = await this.threadRepo.create({
       type: "group",
-      name,
+      name: name || `${clubName} Group`,
       avatarUrl: payload.avatarUrl,
       ownerUserId,
       memberUserIds: members,
+      clubId: new Types.ObjectId(payload.clubId),
     } as any);
 
     return this.toThreadSummary(thread, null, ownerUserId);
@@ -429,7 +541,7 @@ export class ChatService {
     threadName?: string,
   ): Promise<ChatThreadSummary> {
     await this.ensureGroupThreadIndexes();
-    const { clubName, memberUserIds } =
+    const { clubName, clubId, memberUserIds } =
       await this.resolveClubMembers(clubUserId);
     const members = Array.from(new Set([clubUserId, ...memberUserIds]));
     const name = (threadName ?? "").trim() || `${clubName} Club`;
@@ -439,9 +551,105 @@ export class ChatService {
       name,
       ownerUserId: clubUserId,
       memberUserIds: members,
+      clubId: new Types.ObjectId(clubId),
     } as any);
 
     return this.toThreadSummary(thread, null, clubUserId);
+  }
+
+  async listGroupThreadsForClub(
+    viewerUserId: string,
+    clubId: string,
+  ): Promise<ChatThreadSummary[]> {
+    const viewer = await this.userService.getById(viewerUserId);
+    if (!viewer) {
+      throw new NotFoundException("User not found.");
+    }
+
+    if (viewer.role === ROLES.GOLF_CLUB) {
+      const club = await this.golfClubRepository.findById(clubId);
+      if (!club || club.clubUserId.toString() !== viewerUserId) {
+        throw new ForbiddenException("You do not have access to this club.");
+      }
+    } else if (viewer.role === ROLES.GOLFER) {
+      await this.assertGolferInClub(clubId, viewerUserId);
+    } else {
+      throw new ForbiddenException("You do not have access to this club.");
+    }
+
+    const threads = await this.threadRepo.findGroupThreadsForUserByClub(
+      viewerUserId,
+      clubId,
+    );
+    return Promise.all(
+      threads.map((thread) => this.toThreadSummary(thread, null, viewerUserId)),
+    );
+  }
+
+  async listThreadsForClub(
+    viewerUserId: string,
+    clubId: string,
+  ): Promise<ChatThreadSummary[]> {
+    const viewer = await this.userService.getById(viewerUserId);
+    if (!viewer) {
+      throw new NotFoundException("User not found.");
+    }
+
+    let clubContext: { clubName: string; clubUserId: string } | null = null;
+
+    if (viewer.role === ROLES.GOLF_CLUB) {
+      const club = await this.golfClubRepository.findById(clubId);
+      if (!club || club.clubUserId.toString() !== viewerUserId) {
+        throw new ForbiddenException("You do not have access to this club.");
+      }
+    } else if (viewer.role === ROLES.GOLFER) {
+      clubContext = await this.assertGolferInClub(clubId, viewerUserId);
+    } else {
+      throw new ForbiddenException("You do not have access to this club.");
+    }
+
+    const groupThreads = await this.threadRepo.findGroupThreadsForUserByClub(
+      viewerUserId,
+      clubId,
+    );
+    const groupSummaries = await Promise.all(
+      groupThreads.map((thread) =>
+        this.toThreadSummary(thread, null, viewerUserId),
+      ),
+    );
+
+    // For clubs, this route returns only club group chats.
+    if (viewer.role !== ROLES.GOLFER) {
+      return groupSummaries;
+    }
+
+    // For golfers, also include 1:1 threads with other golfers in this club only.
+    const { memberUserIds: clubMemberUserIds } = await this.resolveClubMembers(
+      clubContext!.clubUserId,
+    );
+    const clubMemberSet = new Set(
+      clubMemberUserIds.filter((id) => id !== viewerUserId),
+    );
+
+    const directThreads = await this.threadRepo.findThreadsForUserByType(
+      viewerUserId,
+      "direct",
+    );
+    const directForClub = directThreads.filter((thread) => {
+      const members = (thread.memberUserIds ?? []).map(String);
+      const peerId = members.find((id) => id !== viewerUserId) ?? null;
+      return Boolean(peerId && clubMemberSet.has(peerId));
+    });
+
+    const directSummaries = await Promise.all(
+      directForClub.map((thread) =>
+        this.toThreadSummary(thread, null, viewerUserId),
+      ),
+    );
+
+    return [...groupSummaries, ...directSummaries].sort(
+      (a, b) => b.updatedAt.getTime() - a.updatedAt.getTime(),
+    );
   }
 
   async addGroupMembers(
@@ -494,6 +702,21 @@ export class ChatService {
     const summaries = await Promise.all(
       threads.map((thread) => this.toThreadSummary(thread, null, userId)),
     );
+    return summaries;
+  }
+
+  async listThreadsForUserFiltered(
+    userId: string,
+    filter: { type?: ChatThreadType } = {},
+  ): Promise<ChatThreadSummary[]> {
+    const threads = filter.type
+      ? await this.threadRepo.findThreadsForUserByType(userId, filter.type)
+      : await this.threadRepo.findThreadsForUser(userId);
+
+    const summaries = await Promise.all(
+      threads.map((thread) => this.toThreadSummary(thread, null, userId)),
+    );
+
     return summaries;
   }
 
@@ -552,6 +775,7 @@ export class ChatService {
     return {
       _id: threadId,
       type: thread.type,
+      clubId: thread.clubId ? thread.clubId.toString() : null,
       name: thread.name ?? null,
       avatarUrl: thread.avatarUrl ?? null,
       ownerUserId: thread.ownerUserId ? thread.ownerUserId.toString() : null,
@@ -585,9 +809,79 @@ export class ChatService {
       type: message.type,
       text: message.text ?? null,
       imageUrl: message.imageUrl ?? null,
+      mentionedUserIds: (message.mentionedUserIds ?? []).map((id) =>
+        id.toString(),
+      ),
+      reactions: (message.reactions ?? []).map((reaction) => ({
+        userId: reaction.userId.toString(),
+        emoji: reaction.emoji,
+        reactedAt: reaction.reactedAt,
+      })),
       createdAt: message.createdAt,
       updatedAt: message.updatedAt,
       sender,
+    };
+  }
+
+  async reactToMessage(
+    userId: string,
+    messageId: string,
+    emojiRaw: string,
+  ): Promise<{
+    action: "set" | "removed";
+    message: ChatMessageResponse;
+  }> {
+    const emoji = (emojiRaw ?? "").trim();
+    if (!emoji) {
+      throw new BadRequestException("Reaction emoji is required.");
+    }
+    if (emoji.length > 16) {
+      throw new BadRequestException("Reaction emoji is too long.");
+    }
+
+    const message = await this.messageRepo.findById(messageId);
+    if (!message) {
+      throw new NotFoundException("Message not found.");
+    }
+
+    const thread = await this.threadRepo.findById(
+      (message.threadId as any).toString(),
+    );
+    if (!thread) {
+      throw new NotFoundException("Thread not found.");
+    }
+
+    if (!thread.memberUserIds.map(String).includes(userId)) {
+      throw new ForbiddenException("You are not a member of this thread.");
+    }
+
+    const existing = (message.reactions ?? []).find(
+      (r) => r.userId.toString() === userId,
+    );
+
+    const actorId = new Types.ObjectId(userId);
+    let updated: IChatMessage | null = null;
+    let action: "set" | "removed" = "set";
+
+    if (existing && existing.emoji === emoji) {
+      updated = await this.messageRepo.removeReaction(messageId, actorId);
+      action = "removed";
+    } else {
+      updated = await this.messageRepo.upsertReaction(messageId, {
+        userId: actorId,
+        emoji,
+        reactedAt: new Date(),
+      });
+      action = "set";
+    }
+
+    if (!updated) {
+      throw new NotFoundException("Message not found.");
+    }
+
+    return {
+      action,
+      message: await this.toMessageResponse(updated),
     };
   }
 }

@@ -9,3 +9,14 @@ export const listNotificationsSchema = z.object({
     .optional()
     .default({}),
 });
+
+export const markNotificationsReadSchema = z.object({
+  body: z
+    .object({
+      notificationId: z.string().min(1).optional(),
+      notificationIds: z.array(z.string().min(1)).optional(),
+      countOnly: z.coerce.boolean().optional(),
+    })
+    .optional()
+    .default({}),
+});

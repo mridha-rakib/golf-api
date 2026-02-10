@@ -14,4 +14,10 @@ router.get(
   controller.listMyNotifications,
 );
 
+router.patch(
+  "/read",
+  authMiddleware.authorize(ROLES.ADMIN, ROLES.GOLF_CLUB, ROLES.GOLFER),
+  controller.markNotificationsRead,
+);
+
 export default router;

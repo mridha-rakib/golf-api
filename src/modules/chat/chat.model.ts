@@ -9,6 +9,12 @@ const chatThreadSchema = new Schema<IChatThread>(
       required: true,
       index: true,
     },
+    clubId: {
+      type: Schema.Types.ObjectId,
+      ref: "GolfClub",
+      default: null,
+      index: true,
+    },
     memberUserIds: {
       type: [Schema.Types.ObjectId],
       required: true,
@@ -41,6 +47,7 @@ const chatThreadSchema = new Schema<IChatThread>(
 
 // ensure direct threads are unique through directKey (see directKey unique index)
 chatThreadSchema.index({ type: 1, memberUserIds: 1 });
+chatThreadSchema.index({ clubId: 1, updatedAt: -1 });
 
 const chatMessageSchema = new Schema<IChatMessage>(
   {
@@ -68,6 +75,38 @@ const chatMessageSchema = new Schema<IChatMessage>(
     imageUrl: {
       type: String,
       trim: true,
+    },
+    mentionedUserIds: {
+      type: [Schema.Types.ObjectId],
+      ref: "User",
+      default: [],
+      index: true,
+    },
+    reactions: {
+      type: [
+        new Schema(
+          {
+            userId: {
+              type: Schema.Types.ObjectId,
+              ref: "User",
+              required: true,
+              index: true,
+            },
+            emoji: {
+              type: String,
+              required: true,
+              trim: true,
+              maxlength: 16,
+            },
+            reactedAt: {
+              type: Date,
+              default: Date.now,
+            },
+          },
+          { _id: false },
+        ),
+      ],
+      default: [],
     },
   },
   { timestamps: true }

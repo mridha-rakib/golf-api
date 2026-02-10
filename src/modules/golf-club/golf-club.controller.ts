@@ -18,12 +18,15 @@ import {
 } from "./golf-club.schema";
 import { GolfClubService } from "./golf-club.service";
 import { logger } from "@/middlewares/pino-logger";
+import { UserService } from "@/modules/user/user.service";
 
 export class GolfClubController {
   private golfClubService: GolfClubService;
+  private userService: UserService;
 
   constructor() {
     this.golfClubService = new GolfClubService();
+    this.userService = new UserService();
   }
 
   createGolfClub = asyncHandler(async (req: Request, res: Response) => {
@@ -49,6 +52,41 @@ export class GolfClubController {
   listGolfClubs = asyncHandler(async (req: Request, res: Response) => {
     const result = await this.golfClubService.listGolfClubs();
     ApiResponse.success(res, result, "Golf clubs fetched successfully");
+  });
+
+  listMyClubs = asyncHandler(async (req: Request, res: Response) => {
+    const golferUserId = req.user?.userId;
+    if (!golferUserId) {
+      throw new UnauthorizedException(MESSAGES.AUTH.UNAUTHORIZED_ACCESS);
+    }
+
+    const [clubsOnly, profile] = await Promise.all([
+      this.golfClubService.listClubsForGolfer(golferUserId),
+      this.userService.getProfile(golferUserId),
+    ]);
+
+    // For the chat UI header, the client can render a single list of "club-like"
+    // items by using this synthetic entry for the logged-in golfer.
+    const meAsClub = {
+      _id: profile._id,
+      name: profile.userName || profile.fullName,
+      clubUserId: profile._id,
+      clubEmail: profile.email,
+      managerUserId: null,
+      coverImageUrl: profile.coverImageUrl ?? null,
+      profileImageUrl: profile.profileImageUrl ?? null,
+      country: "",
+      city: "",
+      address: profile.address ?? "",
+      ghinNumber: "",
+      memberCount: 0,
+      createdAt: profile.createdAt,
+      updatedAt: profile.updatedAt,
+    };
+
+    const clubs = [meAsClub, ...clubsOnly];
+
+    ApiResponse.success(res, { clubs }, "Your clubs fetched successfully");
   });
 
   getClubRoles = asyncHandler(async (req: Request, res: Response) => {

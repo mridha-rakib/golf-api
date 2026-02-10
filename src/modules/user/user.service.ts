@@ -1,6 +1,6 @@
 // file: src/modules/user/user.service.ts (ENHANCED VERSION)
 
-import { ACCOUNT_STATUS, MESSAGES } from "@/constants/app.constants";
+import { ACCOUNT_STATUS, MESSAGES, ROLES } from "@/constants/app.constants";
 import { logger } from "@/middlewares/pino-logger";
 import { SocialFollowRepository } from "@/modules/social-feed/social-feed.repository";
 import { EmailService } from "@/services/email.service";
@@ -35,7 +35,7 @@ export class UserService {
   ): UserResponse {
     return {
       _id: user._id.toString(),
-      email: user.email,
+      email: user.email ?? "",
       fullName: user.fullName,
       userName: user.userName || user.fullName,
       phoneNumber: user.phoneNumber || user.phoneNumber || "",
@@ -61,9 +61,16 @@ export class UserService {
   }
 
   async createUser(payload: UserCreatePayload): Promise<IUser> {
-    const existing = await this.userRepository.findByEmail(payload.email);
-    if (existing) {
-      throw new ConflictException(MESSAGES.AUTH.EMAIL_ALREADY_EXISTS);
+    const normalizedEmail = payload.email?.trim();
+    if (!normalizedEmail && payload.role !== ROLES.GOLF_CLUB) {
+      throw new BadRequestException("Email is required.");
+    }
+
+    if (normalizedEmail) {
+      const existing = await this.userRepository.findByEmail(normalizedEmail);
+      if (existing) {
+        throw new ConflictException(MESSAGES.AUTH.EMAIL_ALREADY_EXISTS);
+      }
     }
 
     if (payload.userName) {
@@ -80,7 +87,7 @@ export class UserService {
       : undefined;
 
     return this.userRepository.create({
-      email: payload.email.toLowerCase(),
+      email: normalizedEmail ? normalizedEmail.toLowerCase() : undefined,
       password: hashedPassword,
       fullName: payload.fullName,
       userName: payload.userName?.trim(),
@@ -96,6 +103,19 @@ export class UserService {
 
   async getUserByEmail(email: string): Promise<IUser | null> {
     return this.userRepository.findByEmail(email);
+  }
+
+  async getUserByEmailOrUserNameWithPassword(
+    identifier: string,
+  ): Promise<IUser | null> {
+    return this.userRepository.findByEmailOrUserNameWithPassword(identifier);
+  }
+
+  async isUserNameTaken(userName: string): Promise<boolean> {
+    const normalized = userName.trim();
+    if (!normalized) return false;
+    const existing = await this.userRepository.findByUserName(normalized);
+    return Boolean(existing);
   }
 
   async getUserByEmailWithPassword(email: string): Promise<IUser | null> {
@@ -119,6 +139,10 @@ export class UserService {
       _id: { $in: userIds },
       isDeleted: { $ne: true },
     });
+  }
+
+  async findGolfersByMentionHandles(handles: string[]): Promise<IUser[]> {
+    return this.userRepository.findGolfersByMentionHandles(handles);
   }
 
   async updateProfile(

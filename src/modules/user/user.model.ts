@@ -7,7 +7,17 @@ import type { IUser } from "./user.interface";
 
 const userSchema = BaseSchemaUtil.createSchema<IUser>({
   ...BaseSchemaUtil.mergeDefinitions(
-    BaseSchemaUtil.emailField(true),
+    {
+      email: {
+        type: String,
+        required: false,
+        unique: true,
+        sparse: true,
+        lowercase: true,
+        trim: true,
+        index: true,
+      },
+    },
     BaseSchemaUtil.passwordField(),
     BaseSchemaUtil.phoneNumberField(),
     BaseSchemaUtil.softDeleteFields(),
