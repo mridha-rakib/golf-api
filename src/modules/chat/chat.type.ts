@@ -26,7 +26,7 @@ export type ChatMessageResponse = {
   mentionedUserIds?: string[];
   reactions?: Array<{
     userId: string;
-    emoji: string;
+    emoji: "love";
     reactedAt: Date;
   }>;
   createdAt: Date;
@@ -69,5 +69,5 @@ export type CreateGroupPayload = {
 };
 
 export type ReactToMessagePayload = {
-  emoji: string;
+  emoji?: "love";
 };

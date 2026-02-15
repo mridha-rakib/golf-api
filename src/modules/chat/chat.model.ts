@@ -95,6 +95,8 @@ const chatMessageSchema = new Schema<IChatMessage>(
             emoji: {
               type: String,
               required: true,
+              enum: ["love"],
+              default: "love",
               trim: true,
               maxlength: 16,
             },

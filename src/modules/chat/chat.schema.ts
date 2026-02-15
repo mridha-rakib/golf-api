@@ -19,9 +19,11 @@ export const reactToMessageSchema = z.object({
   params: z.object({
     messageId: z.string().min(1),
   }),
-  body: z.object({
-    emoji: z.string().trim().min(1).max(16),
-  }),
+  body: z
+    .object({
+      emoji: z.string().trim().max(16).optional(),
+    })
+    .default({}),
 });
 
 export const messageIdParamSchema = z.object({

@@ -26,6 +26,8 @@ import type {
 } from "./chat.type";
 
 export class ChatService {
+  private static readonly LOVE_REACTION = "love";
+
   private threadRepo: ChatThreadRepository;
   private messageRepo: ChatMessageRepository;
   private followRepo: SocialFollowRepository;
@@ -814,7 +816,7 @@ export class ChatService {
       ),
       reactions: (message.reactions ?? []).map((reaction) => ({
         userId: reaction.userId.toString(),
-        emoji: reaction.emoji,
+        emoji: ChatService.LOVE_REACTION,
         reactedAt: reaction.reactedAt,
       })),
       createdAt: message.createdAt,
@@ -826,16 +828,13 @@ export class ChatService {
   async reactToMessage(
     userId: string,
     messageId: string,
-    emojiRaw: string,
+    _emojiRaw?: string,
   ): Promise<{
     action: "set" | "removed";
     message: ChatMessageResponse;
   }> {
-    const emoji = (emojiRaw ?? "").trim();
-    if (!emoji) {
-      throw new BadRequestException("Reaction emoji is required.");
-    }
-    if (emoji.length > 16) {
+    const normalizedInput = (_emojiRaw ?? "").trim();
+    if (normalizedInput.length > 16) {
       throw new BadRequestException("Reaction emoji is too long.");
     }
 
@@ -863,13 +862,13 @@ export class ChatService {
     let updated: IChatMessage | null = null;
     let action: "set" | "removed" = "set";
 
-    if (existing && existing.emoji === emoji) {
+    if (existing) {
       updated = await this.messageRepo.removeReaction(messageId, actorId);
       action = "removed";
     } else {
       updated = await this.messageRepo.upsertReaction(messageId, {
         userId: actorId,
-        emoji,
+        emoji: ChatService.LOVE_REACTION,
         reactedAt: new Date(),
       });
       action = "set";

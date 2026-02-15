@@ -25,7 +25,7 @@ export interface IChatMessage extends Document {
   mentionedUserIds?: Types.ObjectId[];
   reactions?: Array<{
     userId: Types.ObjectId;
-    emoji: string;
+    emoji: "love";
     reactedAt: Date;
   }>;
   createdAt: Date;

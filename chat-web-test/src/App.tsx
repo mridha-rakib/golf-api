@@ -2,469 +2,136 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { api, normalizeToken, setToken } from "./api";
 import { createSocket } from "./socket";
 
-type Golfer = { _id: string; fullName?: string; email?: string };
-type FollowingItem = { golfer: Golfer; isFollowing: boolean };
-type ClubRosterItem = { golferId: string; user: Golfer };
+type UserLite = { _id: string; fullName?: string; email?: string };
+type FollowingItem = { golfer: UserLite; isFollowing: boolean };
 type Thread = {
   _id: string;
   type: "direct" | "group";
   name?: string | null;
   memberUserIds: string[];
-  lastMessage?: any;
-  directPeer?: Golfer | null;
+  directPeer?: UserLite | null;
+  lastMessage?: { text?: string | null; imageUrl?: string | null } | null;
 };
-
+type Reaction = { userId: string; emoji: "love"; reactedAt: string };
 type Message = {
   _id: string;
+  threadId: string;
   senderUserId: string;
-  text?: string | null;
-  imageUrl?: string | null;
+  text: string | null;
+  imageUrl: string | null;
   createdAt: string;
+  reactions: Reaction[];
+  sender?: UserLite | null;
 };
 
-const appCss = `
-@import url("https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap");
-
-:root {
-  --bg: #0b1020;
-  --panel: rgba(12, 18, 32, 0.85);
-  --panel-strong: rgba(17, 27, 48, 0.95);
-  --text: #e6ecfb;
-  --muted: #9aa7c7;
-  --accent: #3aa1ff;
-  --accent-2: #4ce1c1;
-  --border: rgba(255, 255, 255, 0.08);
-  --bubble-me: linear-gradient(135deg, #3aa1ff 0%, #1f6feb 100%);
-  --bubble-them: #172238;
-}
-
-* {
-  box-sizing: border-box;
-}
-
-body {
-  margin: 0;
-  background: var(--bg);
-  color: var(--text);
-}
-
-.app-shell {
-  min-height: 100vh;
-  padding: 24px;
-  font-family: "Space Grotesk", "DM Sans", sans-serif;
-  background:
-    radial-gradient(900px circle at 12% -10%, rgba(58, 161, 255, 0.25), transparent 55%),
-    radial-gradient(900px circle at 110% 10%, rgba(76, 225, 193, 0.2), transparent 55%),
-    var(--bg);
-}
-
-.top-bar {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 16px;
-  margin-bottom: 18px;
-}
-
-.brand {
-  display: flex;
-  align-items: center;
-  gap: 14px;
-}
-
-.logo-mark {
-  width: 46px;
-  height: 46px;
-  border-radius: 14px;
-  background: linear-gradient(135deg, #3aa1ff 0%, #4ce1c1 100%);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.35);
-}
-
-.logo-mark svg {
-  width: 24px;
-  height: 24px;
-}
-
-.brand-title {
-  font-size: 20px;
-  font-weight: 700;
-  letter-spacing: 0.4px;
-}
-
-.brand-subtitle {
-  font-size: 12px;
-  color: var(--muted);
-}
-
-.status-pill {
-  padding: 6px 12px;
-  border-radius: 999px;
-  background: rgba(58, 161, 255, 0.15);
-  border: 1px solid rgba(58, 161, 255, 0.35);
-  font-size: 12px;
-  color: var(--text);
-}
-
-.columns {
-  display: grid;
-  grid-template-columns: 300px minmax(0, 1fr) 320px;
-  gap: 18px;
-}
-
-.sidebar,
-.main,
-.side-right {
-  display: flex;
-  flex-direction: column;
-  gap: 14px;
-}
-
-.panel {
-  background: var(--panel);
-  border: 1px solid var(--border);
-  border-radius: 16px;
-  padding: 14px;
-  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.35);
-  backdrop-filter: blur(6px);
-}
-
-.panel-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 10px;
-  font-weight: 600;
-}
-
-.panel-note {
-  font-size: 12px;
-  color: var(--muted);
-}
-
-.input,
-.textarea {
-  width: 100%;
-  padding: 10px 12px;
-  border-radius: 12px;
-  border: 1px solid var(--border);
-  background: #0b1324;
-  color: var(--text);
-  font-family: "DM Sans", sans-serif;
-}
-
-.textarea {
-  min-height: 74px;
-  resize: vertical;
-}
-
-.btn-row {
-  display: flex;
-  gap: 8px;
-  flex-wrap: wrap;
-}
-
-.btn {
-  padding: 9px 14px;
-  border-radius: 12px;
-  border: none;
-  background: var(--accent);
-  color: #051021;
-  font-weight: 600;
-  cursor: pointer;
-}
-
-.btn.secondary {
-  background: transparent;
-  color: var(--text);
-  border: 1px solid var(--border);
-}
-
-.btn:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
-}
-
-.list {
-  max-height: 220px;
-  overflow: auto;
-  border-radius: 12px;
-  border: 1px solid var(--border);
-  background: rgba(8, 12, 22, 0.7);
-}
-
-.list-item {
-  padding: 10px 12px;
-  border-bottom: 1px solid var(--border);
-  cursor: pointer;
-}
-
-.list-item:last-child {
-  border-bottom: none;
-}
-
-.list-item.selected {
-  background: rgba(58, 161, 255, 0.18);
-}
-
-.list-title {
-  font-weight: 600;
-}
-
-.list-subtitle {
-  font-size: 12px;
-  color: var(--muted);
-  margin-top: 4px;
-}
-
-.list-item.muted {
-  cursor: default;
-  color: var(--muted);
-}
-
-.chat-panel {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  min-height: 560px;
-}
-
-.chat-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-}
-
-.chat-title {
-  font-size: 18px;
-  font-weight: 600;
-}
-
-.chat-subtitle {
-  font-size: 12px;
-  color: var(--muted);
-}
-
-.chat-scroll {
-  flex: 1;
-  max-height: 520px;
-  overflow: auto;
-  padding: 14px;
-  border-radius: 16px;
-  border: 1px solid var(--border);
-  background: #0b1324;
-}
-
-.message-row {
-  display: flex;
-  align-items: flex-end;
-  gap: 10px;
-  margin-bottom: 14px;
-}
-
-.message-row.me {
-  justify-content: flex-end;
-}
-
-.avatar {
-  width: 32px;
-  height: 32px;
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 12px;
-  font-weight: 700;
-  background: #162235;
-  color: var(--muted);
-}
-
-.avatar.me {
-  background: linear-gradient(135deg, #3aa1ff 0%, #4ce1c1 100%);
-  color: #051021;
-}
-
-.message-block {
-  max-width: 72%;
-}
-
-.message-meta {
-  font-size: 12px;
-  color: var(--muted);
-  margin-bottom: 4px;
-}
-
-.message-meta.me {
-  text-align: right;
-}
-
-.bubble {
-  padding: 10px 12px;
-  border-radius: 16px;
-  border: 1px solid var(--border);
-  background: var(--bubble-them);
-}
-
-.bubble.me {
-  border: none;
-  background: var(--bubble-me);
-  color: #051021;
-}
-
-.message-text {
-  white-space: pre-wrap;
-  line-height: 1.4;
-}
-
-.message-media {
-  margin-top: 8px;
-  border-radius: 12px;
-  max-width: 240px;
-  display: block;
-  border: 1px solid var(--border);
-}
-
-.input-row {
-  display: grid;
-  grid-template-columns: 1fr auto;
-  gap: 10px;
-}
-
-.empty-state {
-  text-align: center;
-  padding: 48px 24px;
-  color: var(--muted);
-}
-
-.log-list {
-  max-height: 200px;
-  overflow: auto;
-  font-size: 12px;
-  color: var(--muted);
-}
-
-.log-item {
-  padding: 6px 0;
-  border-bottom: 1px dashed rgba(255, 255, 255, 0.06);
-}
-
-.log-item:last-child {
-  border-bottom: none;
-}
-
-.checkbox-list label {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin-bottom: 8px;
-  font-size: 13px;
-}
-
-@media (max-width: 1100px) {
-  .columns {
-    grid-template-columns: 1fr;
-  }
-
-  .chat-panel {
-    min-height: unset;
-  }
-}
+const css = `
+*{box-sizing:border-box}body{margin:0;font-family:system-ui,sans-serif;background:#0e1320;color:#e9eefb}
+.wrap{padding:16px;display:grid;gap:12px}
+.card{background:#151d30;border:1px solid #2b3656;border-radius:10px;padding:12px}
+.row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.input,.textarea,button{background:#0f1728;border:1px solid #2b3656;color:#e9eefb;border-radius:8px;padding:8px}
+button{cursor:pointer}
+.input{width:100%}.textarea{width:100%;min-height:70px}
+.grid{display:grid;grid-template-columns:280px 1fr 320px;gap:12px}
+.list{max-height:220px;overflow:auto;border:1px solid #2b3656;border-radius:8px}
+.item{padding:8px;border-bottom:1px solid #23304c;cursor:pointer}.item:last-child{border-bottom:none}
+.item.sel{background:#1d2945}.muted{color:#9badcf;font-size:12px}
+.chat{display:grid;gap:10px}
+.msgs{max-height:60vh;overflow:auto;border:1px solid #2b3656;border-radius:8px;padding:10px}
+.msg{margin-bottom:10px;padding:8px;border:1px solid #2b3656;border-radius:8px;background:#10182a}
+.meta{font-size:12px;color:#9badcf}.txt{white-space:pre-wrap}
+.rx{display:flex;gap:8px;align-items:center;margin-top:6px}
+.rxbtn{padding:4px 8px;font-size:12px}.rxbtn.active{border-color:#48d0a0;color:#48d0a0}
+.log{max-height:240px;overflow:auto;font-size:12px}
+@media(max-width:1100px){.grid{grid-template-columns:1fr}}
 `;
+
+const isRecord = (v: unknown): v is Record<string, any> =>
+  typeof v === "object" && v !== null;
+const toStr = (v: unknown): string | null =>
+  typeof v === "string" ? v : v == null ? null : String(v);
+const normalizeUser = (v: unknown): UserLite | null => {
+  if (!isRecord(v)) return null;
+  const id = toStr(v._id ?? v.id);
+  if (!id) return null;
+  return {
+    _id: id,
+    fullName: toStr(v.fullName) ?? undefined,
+    email: toStr(v.email) ?? undefined,
+  };
+};
+const normalizeReactions = (v: unknown): Reaction[] =>
+  Array.isArray(v)
+    ? v
+        .map((x) => {
+          if (!isRecord(x)) return null;
+          const userId = toStr(x.userId);
+          if (!userId) return null;
+          return {
+            userId,
+            emoji: "love" as const,
+            reactedAt: toStr(x.reactedAt) ?? new Date().toISOString(),
+          };
+        })
+        .filter((x): x is Reaction => Boolean(x))
+    : [];
+const normalizeMessage = (v: unknown, fallbackThreadId?: string): Message | null => {
+  if (!isRecord(v)) return null;
+  const id = toStr(v._id ?? v.id);
+  const threadId = toStr(v.threadId ?? v.convId) ?? fallbackThreadId;
+  const senderUserId = toStr(v.senderUserId ?? v.senderId);
+  if (!id || !threadId || !senderUserId) return null;
+  const mediaArr =
+    Array.isArray(v.mediaUrls) && v.mediaUrls.length > 0 && typeof v.mediaUrls[0] === "string"
+      ? v.mediaUrls[0]
+      : null;
+  const imageUrl = toStr(v.imageUrl ?? v.mediaUrl) ?? mediaArr;
+  const textRaw = toStr(v.text);
+  return {
+    _id: id,
+    threadId,
+    senderUserId,
+    text: textRaw && textRaw.trim() ? textRaw : null,
+    imageUrl: imageUrl && imageUrl.trim() ? imageUrl : null,
+    createdAt: toStr(v.createdAt ?? v.sentAt) ?? new Date().toISOString(),
+    reactions: normalizeReactions(v.reactions),
+    sender: normalizeUser(v.sender),
+  };
+};
+const unwrap = (res: any): any => res?.data?.data ?? res?.data ?? res;
+const fmtTime = (value: string) => {
+  const d = new Date(value);
+  return Number.isNaN(d.getTime())
+    ? ""
+    : d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+};
 
 export default function App() {
   const [token, setJwt] = useState("");
   const [viewerRole, setViewerRole] = useState<string | null>(null);
   const [viewerUserId, setViewerUserId] = useState<string | null>(null);
   const [following, setFollowing] = useState<FollowingItem[]>([]);
-  const [clubRoster, setClubRoster] = useState<Golfer[]>([]);
+  const [clubRoster, setClubRoster] = useState<UserLite[]>([]);
   const [threads, setThreads] = useState<Thread[]>([]);
-  const [selectedPeer, setSelectedPeer] = useState<Golfer | null>(null);
+  const [selectedPeer, setSelectedPeer] = useState<UserLite | null>(null);
   const [selectedThread, setSelectedThread] = useState<Thread | null>(null);
   const selectedThreadRef = useRef<Thread | null>(null);
   const [joinedThreadId, setJoinedThreadId] = useState<string | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
-  const [messagesError, setMessagesError] = useState<string | null>(null);
+  const [text, setText] = useState("");
+  const [mediaUrl, setMediaUrl] = useState("");
   const [groupName, setGroupName] = useState("");
   const [groupMembers, setGroupMembers] = useState<Set<string>>(new Set());
-  const [text, setText] = useState("");
   const [log, setLog] = useState<string[]>([]);
+  const [busyReactionId, setBusyReactionId] = useState<string | null>(null);
+
   const rawToken = useMemo(() => normalizeToken(token), [token]);
-  const socket = useMemo(
-    () => (rawToken ? createSocket(rawToken) : null),
-    [rawToken],
-  );
+  const socket = useMemo(() => (rawToken ? createSocket(rawToken) : null), [rawToken]);
+  const addLog = (line: string) => setLog((prev) => [...prev.slice(-120), line]);
 
   useEffect(() => {
     selectedThreadRef.current = selectedThread;
   }, [selectedThread]);
-
-  useEffect(() => {
-    if (!socket) return;
-    const add = (m: string) => setLog((l) => [...l.slice(-80), m]);
-    socket.on("connect", () => add("socket connected"));
-    socket.on("connect_error", (e) => add(`connect_error: ${e.message}`));
-    socket.on("new-msg", (p) => {
-      add(
-        `[${p.convId}] ${p.senderId}: ${
-          p.text ?? (p.mediaUrls?.[0] || "[media]")
-        }`,
-      );
-      setMessages((prev) => {
-        const current = selectedThreadRef.current;
-        if (!current || p.convId !== current._id) {
-          return prev;
-        }
-        if (prev.some((m) => m._id === p.id || m._id === p.tempId)) {
-          return prev;
-        }
-        return [
-          ...prev,
-          {
-            _id: p.id ?? p.tempId ?? `tmp-${Date.now()}`,
-            senderUserId: p.senderId,
-            text: p.text,
-            imageUrl: p.mediaUrls?.[0] ?? null,
-            createdAt: p.sentAt ?? new Date().toISOString(),
-          },
-        ];
-      });
-    });
-    return () => {
-      socket.disconnect();
-    };
-  }, [socket]);
-
-  useEffect(() => {
-    if (!socket || !selectedThread?._id) return;
-    setJoinedThreadId(null);
-    socket.emit("join", { convId: selectedThread._id }, (resp: any) => {
-      setLog((l) => [
-        ...l.slice(-80),
-        resp?.ok
-          ? `joined ${selectedThread._id}`
-          : `join failed: ${resp?.error}`,
-      ]);
-      if (resp?.ok) {
-        setJoinedThreadId(selectedThread._id);
-      }
-    });
-  }, [socket, selectedThread]);
-
-  const parseJwt = (jwt: string) => {
-    const parts = jwt.split(".");
-    if (parts.length !== 3) return null;
-    try {
-      const payload = parts[1].replace(/-/g, "+").replace(/_/g, "/");
-      const padded = payload + "===".slice((payload.length + 3) % 4);
-      const decoded = atob(padded);
-      return JSON.parse(decoded);
-    } catch {
-      return null;
-    }
-  };
 
   useEffect(() => {
     if (!rawToken) {
@@ -472,548 +139,413 @@ export default function App() {
       setViewerUserId(null);
       return;
     }
-    const payload = parseJwt(rawToken);
-    setViewerRole(payload?.role ?? null);
-    setViewerUserId(
-      payload?.userId ?? payload?._id ?? payload?.id ?? payload?.sub ?? null,
-    );
+    try {
+      const part = rawToken.split(".")[1];
+      const payload = JSON.parse(atob(part.replace(/-/g, "+").replace(/_/g, "/")));
+      setViewerRole(typeof payload?.role === "string" ? payload.role : null);
+      setViewerUserId(
+        (typeof payload?.userId === "string" && payload.userId) ||
+          (typeof payload?._id === "string" && payload._id) ||
+          null,
+      );
+    } catch {
+      setViewerRole(null);
+      setViewerUserId(null);
+    }
   }, [rawToken]);
 
-  const userDirectory = useMemo(() => {
-    const map = new Map<string, Golfer>();
-    following.forEach((f) => map.set(f.golfer._id, f.golfer));
-    clubRoster.forEach((m) => map.set(m._id, m));
-    threads.forEach((t) => {
-      if (t.directPeer?._id) {
-        map.set(t.directPeer._id, t.directPeer);
-      }
+  const ensureJoin = async (threadId: string) => {
+    if (!socket) return false;
+    if (socket.connected && joinedThreadId === threadId) return true;
+    return new Promise<boolean>((resolve) => {
+      socket.emit("join", { convId: threadId }, (resp: any) => {
+        if (resp?.ok) {
+          setJoinedThreadId(threadId);
+          addLog(`joined ${threadId}`);
+          resolve(true);
+          return;
+        }
+        addLog(`join failed: ${resp?.error ?? "unknown error"}`);
+        resolve(false);
+      });
     });
-    if (viewerUserId) {
-      map.set(viewerUserId, { _id: viewerUserId, fullName: "You" });
-    }
-    return map;
-  }, [following, clubRoster, threads, viewerUserId]);
-
-  const getDisplayName = (id?: string | null) => {
-    if (!id) return "Unknown";
-    if (id === "me") return "You";
-    const user = userDirectory.get(id);
-    return user?.fullName || user?.email || `User ${id.slice(-6)}`;
   };
 
-  const getInitials = (label: string) => {
-    const cleaned = label.replace(/[^a-zA-Z0-9 ]/g, " ").trim();
-    if (!cleaned) return "?";
-    const parts = cleaned.split(/\s+/).slice(0, 2);
-    const letters = parts.map((p) => p[0]).join("");
-    return letters.toUpperCase();
-  };
+  useEffect(() => {
+    if (!socket) return;
 
-  const formatTime = (value: string) => {
-    const date = new Date(value);
-    if (Number.isNaN(date.getTime())) return "";
-    return date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
-  };
+    const onConnect = () => addLog("socket connected");
+    const onConnectError = (err: Error) => addLog(`connect_error: ${err.message}`);
+    const onNew = (payload: unknown) => {
+      const msg = normalizeMessage(payload);
+      if (!msg) return;
+      setThreads((prev) => {
+        const i = prev.findIndex((x) => x._id === msg.threadId);
+        if (i < 0) return prev;
+        const updated: Thread = {
+          ...prev[i],
+          lastMessage: { text: msg.text, imageUrl: msg.imageUrl },
+        };
+        return [updated, ...prev.filter((_, idx) => idx !== i)];
+      });
+      setMessages((prev) => {
+        const current = selectedThreadRef.current;
+        if (!current || current._id !== msg.threadId) return prev;
+        const tempId = isRecord(payload) ? toStr(payload.tempId) : null;
+        if (tempId) {
+          const ti = prev.findIndex((x) => x._id === tempId);
+          if (ti >= 0) {
+            const next = [...prev];
+            next[ti] = { ...next[ti], ...msg };
+            return next;
+          }
+        }
+        const i = prev.findIndex((x) => x._id === msg._id);
+        if (i >= 0) {
+          const next = [...prev];
+          next[i] = { ...next[i], ...msg };
+          return next;
+        }
+        return [...prev, msg];
+      });
+    };
+    const onReacted = (payload: any) => {
+      const messageId = toStr(payload?.messageId);
+      const convId = toStr(payload?.convId);
+      if (!messageId || !convId) return;
+      const reactions = normalizeReactions(payload?.reactions);
+      setMessages((prev) => {
+        const current = selectedThreadRef.current;
+        if (!current || current._id !== convId) return prev;
+        return prev.map((m) => (m._id === messageId ? { ...m, reactions } : m));
+      });
+    };
 
-  const loadFollowing = async () => {
+    socket.on("connect", onConnect);
+    socket.on("connect_error", onConnectError);
+    socket.on("new-msg", onNew);
+    socket.on("msg-reacted", onReacted);
+    return () => {
+      socket.off("connect", onConnect);
+      socket.off("connect_error", onConnectError);
+      socket.off("new-msg", onNew);
+      socket.off("msg-reacted", onReacted);
+      socket.disconnect();
+    };
+  }, [socket]);
+
+  const loadPeople = async () => {
     if (!token.trim()) return;
     setToken(token.trim());
-
-    if (viewerRole === "golf_club") {
-      const res = await api.get("/golf-clubs/me/roles");
-      const managers: ClubRosterItem[] = res.data.data?.managers ?? [];
-      const members: ClubRosterItem[] = res.data.data?.members ?? [];
-      const roster = [...managers, ...members]
-        .map((entry) => entry.user)
-        .filter(Boolean);
-      setClubRoster(roster);
-      setFollowing([]);
-      return;
+    try {
+      if (viewerRole === "golf_club") {
+        const res = await api.get("/golf-clubs/me/roles");
+        const payload = unwrap(res);
+        const managers = Array.isArray(payload?.managers) ? payload.managers : [];
+        const members = Array.isArray(payload?.members) ? payload.members : [];
+        const roster = [...managers, ...members]
+          .map((x) => normalizeUser(x?.user))
+          .filter((x): x is UserLite => Boolean(x));
+        setClubRoster(roster);
+        setFollowing([]);
+        addLog(`loaded ${roster.length} club members`);
+        return;
+      }
+      const res = await api.get("/social-feed/golfers/following", {
+        params: { page: 1, limit: 50 },
+      });
+      const list = Array.isArray(unwrap(res)) ? unwrap(res) : [];
+      setFollowing(list as FollowingItem[]);
+      setClubRoster([]);
+      addLog(`loaded ${list.length} following`);
+    } catch (e) {
+      addLog(`load people failed: ${e instanceof Error ? e.message : String(e)}`);
     }
-
-    const res = await api.get("/social-feed/golfers/following", {
-      params: { page: 1, limit: 50 },
-    });
-    setFollowing(res.data.data ?? []);
-    setClubRoster([]);
   };
 
   const loadThreads = async () => {
     if (!token.trim()) return;
     setToken(token.trim());
-    const res = await api.get("/chat/threads");
-    setThreads(res.data.data ?? res.data ?? []);
+    try {
+      const res = await api.get("/chat/threads");
+      const list = Array.isArray(unwrap(res)) ? unwrap(res) : [];
+      setThreads(list as Thread[]);
+      addLog(`loaded ${list.length} threads`);
+    } catch (e) {
+      addLog(`load threads failed: ${e instanceof Error ? e.message : String(e)}`);
+    }
   };
 
   const loadMessages = async (threadId: string) => {
     if (!token.trim()) return;
     setToken(token.trim());
     try {
-      setMessagesError(null);
-      const res = await api.get(`/chat/threads/${threadId}/messages`, {
-        params: { page: 1, limit: 50 },
-      });
-      const raw = res.data?.data ?? res.data;
-      const data = Array.isArray(raw)
-        ? raw
-        : Array.isArray(raw?.messages)
-          ? raw.messages
-          : [];
-      if (!Array.isArray(raw)) {
-        setLog((l) => [
-          ...l.slice(-80),
-          "load messages: unexpected payload shape",
-        ]);
-      }
-      setMessages(
-        data
-          .map((m: any) => ({
-            _id: m._id,
-            senderUserId: m.senderUserId,
-            text: m.text,
-            imageUrl: m.imageUrl,
-            createdAt: m.createdAt,
-          })),
-      );
-      setLog((l) => [...l.slice(-80), `loaded ${data.length} messages`]);
-    } catch (err: any) {
-      const msg = err?.message || String(err);
+      const res = await api.get(`/chat/threads/${threadId}/messages`);
+      const payload = unwrap(res);
+      const raw = Array.isArray(payload) ? payload : Array.isArray(payload?.messages) ? payload.messages : [];
+      const mapped = raw
+        .map((x: unknown) => normalizeMessage(x, threadId))
+        .filter((x: Message | null): x is Message => Boolean(x));
+      setMessages(mapped);
+      addLog(`loaded ${mapped.length} messages`);
+    } catch (e) {
+      addLog(`load messages failed: ${e instanceof Error ? e.message : String(e)}`);
       setMessages([]);
-      setMessagesError(msg);
-      setLog((l) => [...l.slice(-80), `load messages error: ${msg}`]);
+    }
+  };
+
+  const openThread = async (thread: Thread) => {
+    setSelectedThread(thread);
+    await loadMessages(thread._id);
+    if (socket) await ensureJoin(thread._id);
+  };
+
+  const createDirect = async () => {
+    if (!selectedPeer || !token.trim()) return;
+    setToken(token.trim());
+    try {
+      const res = await api.post("/chat/threads/direct", { golferUserId: selectedPeer._id });
+      const thread = unwrap(res) as Thread;
+      if (!thread?._id) return;
+      addLog(`direct ready with ${selectedPeer.fullName || selectedPeer._id}`);
+      await loadThreads();
+      await openThread(thread);
+    } catch (e) {
+      addLog(`direct failed: ${e instanceof Error ? e.message : String(e)}`);
     }
   };
 
   const sendMessage = async () => {
-    if (!socket || !selectedThread || !text.trim()) return;
-    const trimmed = text.trim();
+    if (!selectedThread || !socket) return;
+    const t = text.trim();
+    const m = mediaUrl.trim();
+    if (!t && !m) return;
+    if (!(await ensureJoin(selectedThread._id))) return;
     const tempId = `tmp-${Date.now()}`;
-
-    if (joinedThreadId !== selectedThread._id) {
-      const joined = await new Promise<boolean>((resolve) => {
-        socket.emit("join", { convId: selectedThread._id }, (resp: any) =>
-          resolve(Boolean(resp?.ok)),
-        );
-      });
-      if (!joined) {
-        setLog((l) => [
-          ...l.slice(-80),
-          "send aborted: failed to join thread",
-        ]);
-        return;
-      }
-      setJoinedThreadId(selectedThread._id);
-    }
-
-    setText("");
-    setMessages((msgs) => [
-      ...msgs,
+    setMessages((prev) => [
+      ...prev,
       {
         _id: tempId,
+        threadId: selectedThread._id,
         senderUserId: viewerUserId ?? "me",
-        text: trimmed,
-        imageUrl: null,
+        text: t || null,
+        imageUrl: m || null,
         createdAt: new Date().toISOString(),
+        reactions: [],
       },
     ]);
-
+    setText("");
+    setMediaUrl("");
     socket.emit(
       "send-msg",
-      { convId: selectedThread._id, text: trimmed, tempId },
-      async (resp: any) => {
+      { convId: selectedThread._id, text: t || undefined, mediaUrl: m || undefined, tempId },
+      (resp: any) => {
         if (!resp?.ok) {
-          setMessages((msgs) => msgs.filter((m) => m._id !== tempId));
-          setLog((l) => [
-            ...l.slice(-80),
-            `send error: ${resp?.error ?? resp}`,
-          ]);
+          setMessages((prev) => prev.filter((x) => x._id !== tempId));
+          addLog(`send failed: ${resp?.error ?? "unknown error"}`);
           return;
         }
-        if (resp?.message?.id) {
-          setMessages((msgs) =>
-            msgs.map((m) =>
-              m._id === tempId
-                ? {
-                    ...m,
-                    _id: resp.message.id,
-                    senderUserId: resp.message.senderId ?? m.senderUserId,
-                    text: resp.message.text ?? m.text,
-                  }
-                : m,
-            ),
-          );
+        const mapped = normalizeMessage(resp?.message, selectedThread._id);
+        if (mapped) {
+          setMessages((prev) => prev.map((x) => (x._id === tempId ? { ...x, ...mapped } : x)));
         }
-        setLog((l) => [...l.slice(-80), "sent"]);
-        await loadMessages(selectedThread._id);
       },
     );
   };
 
-  const toggleMember = (id: string) =>
-    setGroupMembers((prev) => {
-      const next = new Set(prev);
-      next.has(id) ? next.delete(id) : next.add(id);
-      return next;
-    });
+  const reactToMessage = async (messageId: string) => {
+    if (!selectedThread || !token.trim()) return;
+    setToken(token.trim());
+    setBusyReactionId(messageId);
+    try {
+      if (socket && (await ensureJoin(selectedThread._id))) {
+        const ok = await new Promise<boolean>((resolve) => {
+          socket.emit("react-msg", { messageId }, (resp: any) => {
+            if (!resp?.ok) {
+              resolve(false);
+              return;
+            }
+            const reactions = normalizeReactions(resp?.data?.reactions);
+            setMessages((prev) =>
+              prev.map((x) => (x._id === messageId ? { ...x, reactions } : x)),
+            );
+            resolve(true);
+          });
+        });
+        if (ok) return;
+      }
+      const res = await api.patch(`/chat/messages/${messageId}/reaction`, {});
+      const updated = normalizeMessage(unwrap(res)?.message, selectedThread._id);
+      if (updated) {
+        setMessages((prev) =>
+          prev.map((x) => (x._id === messageId ? { ...x, reactions: updated.reactions } : x)),
+        );
+      }
+    } catch (e) {
+      addLog(`react failed: ${e instanceof Error ? e.message : String(e)}`);
+    } finally {
+      setBusyReactionId(null);
+    }
+  };
 
   const createGroup = async () => {
     if (!token.trim() || !groupName.trim()) return;
     setToken(token.trim());
     const payload: any = { name: groupName.trim() };
-    if (viewerRole !== "golf_club") {
-      payload.memberUserIds = Array.from(groupMembers);
+    if (viewerRole !== "golf_club") payload.memberUserIds = Array.from(groupMembers);
+    try {
+      await api.post("/chat/threads/group", payload);
+      setGroupName("");
+      setGroupMembers(new Set());
+      await loadThreads();
+      addLog("group created");
+    } catch (e) {
+      addLog(`group create failed: ${e instanceof Error ? e.message : String(e)}`);
     }
-    const res = await api.post("/chat/threads/group", payload);
-    setLog((l) => [
-      ...l.slice(-80),
-      `group created: ${res.data.data?.name ?? res.data.data?._id ?? "ok"}`,
-    ]);
-    setGroupName("");
-    setGroupMembers(new Set());
-    await loadThreads();
   };
 
-  const socketStatus = socket?.connected
-    ? "Online"
-    : socket
-      ? "Connecting"
-      : "Offline";
-
-  const selectedTitle = selectedThread
+  const usersById = useMemo(() => {
+    const map = new Map<string, UserLite>();
+    following.forEach((x) => map.set(x.golfer._id, x.golfer));
+    clubRoster.forEach((x) => map.set(x._id, x));
+    threads.forEach((x) => x.directPeer?._id && map.set(x.directPeer._id, x.directPeer));
+    messages.forEach((x) => x.sender?._id && map.set(x.sender._id, x.sender));
+    return map;
+  }, [following, clubRoster, threads, messages]);
+  const display = (id: string) =>
+    id === viewerUserId ? "You" : usersById.get(id)?.fullName || usersById.get(id)?.email || id.slice(-6);
+  const threadTitle = selectedThread
     ? selectedThread.type === "direct"
-      ? selectedThread.directPeer?.fullName ||
-        selectedThread.directPeer?.email ||
-        "Direct message"
-      : selectedThread.name || "Group chat"
-    : "";
+      ? selectedThread.directPeer?.fullName || selectedThread.directPeer?.email || "Direct"
+      : selectedThread.name || "Group"
+    : "No thread selected";
 
   return (
-    <div className="app-shell">
-      <style>{appCss}</style>
-      <header className="top-bar">
-        <div className="brand">
-          <div className="logo-mark" aria-hidden>
-            <svg viewBox="0 0 24 24" fill="none">
-              <path
-                d="M6 6h12a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H10l-4 4v-4H6a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2Z"
-                fill="#0b1020"
-              />
-              <path
-                d="m9 9 3.5 3.5L9 16m6-7-3.5 3.5L15 16"
-                stroke="#e6ecfb"
-                strokeWidth="1.6"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              />
-            </svg>
+    <div className="wrap">
+      <style>{css}</style>
+      <div className="card row">
+        <input className="input" placeholder="Paste JWT" value={token} onChange={(e) => setJwt(e.target.value)} />
+        <button onClick={loadPeople}>Load People</button>
+        <button onClick={loadThreads}>Load Threads</button>
+        <span className="muted">role: {viewerRole || "-"}</span>
+        <span className="muted">socket: {socket?.connected ? "online" : socket ? "connecting" : "offline"}</span>
+      </div>
+
+      <div className="grid">
+        <div className="card">
+          <div className="row"><strong>{viewerRole === "golf_club" ? "Club Roster" : "Following"}</strong></div>
+          <div className="list">
+            {viewerRole === "golf_club" &&
+              clubRoster.map((u) => <div className="item" key={u._id}>{u.fullName || u.email || u._id}</div>)}
+            {viewerRole !== "golf_club" &&
+              following.map((f) => (
+                <div
+                  className={`item ${selectedPeer?._id === f.golfer._id ? "sel" : ""}`}
+                  key={f.golfer._id}
+                  onClick={() => setSelectedPeer(f.golfer)}
+                >
+                  {f.golfer.fullName || f.golfer.email || f.golfer._id}
+                </div>
+              ))}
           </div>
-          <div>
-            <div className="brand-title">Golf Messenger</div>
-            <div className="brand-subtitle">
-              Threads, groups, and realtime updates
+          {viewerRole !== "golf_club" && (
+            <div className="row" style={{ marginTop: 8 }}>
+              <button disabled={!selectedPeer} onClick={createDirect}>Create/Load Direct</button>
             </div>
-          </div>
-        </div>
-        <div className="status-pill">Socket: {socketStatus}</div>
-      </header>
-
-      <div className="columns">
-        <aside className="sidebar">
-          <section className="panel">
-            <div className="panel-header">
-              <span>Connection</span>
-              {viewerRole && <span className="panel-note">{viewerRole}</span>}
-            </div>
-            <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-              <input
-                className="input"
-                placeholder="Paste JWT"
-                value={token}
-                onChange={(e) => setJwt(e.target.value)}
-              />
-              <div className="btn-row">
-                <button className="btn" onClick={loadFollowing}>
-                  Load People
-                </button>
-                <button className="btn secondary" onClick={loadThreads}>
-                  Load Threads
-                </button>
-              </div>
-            </div>
-          </section>
-
-          <section className="panel">
-            <div className="panel-header">
-              <span>{viewerRole === "golf_club" ? "Club Roster" : "Following"}</span>
-            </div>
-            <div className="list">
-              {viewerRole === "golf_club" &&
-                clubRoster.map((member) => (
-                  <div key={member._id} className="list-item muted">
-                    <div className="list-title">
-                      {member.fullName || member.email || member._id}
-                    </div>
-                  </div>
-                ))}
-              {viewerRole === "golf_club" && !clubRoster.length && (
-                <div className="list-item muted">No club members loaded.</div>
-              )}
-              {viewerRole !== "golf_club" &&
-                following.map((f) => (
-                  <div
-                    key={f.golfer._id}
-                    className={`list-item ${
-                      selectedPeer?._id === f.golfer._id ? "selected" : ""
-                    }`}
-                    onClick={() => setSelectedPeer(f.golfer)}
-                  >
-                    <div className="list-title">
-                      {f.golfer.fullName || f.golfer.email || f.golfer._id}
-                    </div>
-                    <div className="list-subtitle">Tap to start a direct</div>
-                  </div>
-                ))}
-              {viewerRole !== "golf_club" && !following.length && (
-                <div className="list-item muted">No following golfers loaded.</div>
-              )}
-            </div>
-            {viewerRole !== "golf_club" && (
-              <button
-                className="btn secondary"
-                disabled={!selectedPeer}
-                onClick={async () => {
-                  if (!selectedPeer) return;
-                  if (!token.trim()) return;
-                  setToken(token.trim());
-                  try {
-                    const res = await api.post("/chat/threads/direct", {
-                      golferUserId: selectedPeer._id,
-                    });
-                    const thread = res.data.data ?? res.data;
-                    setLog((l) => [
-                      ...l.slice(-80),
-                      `direct ready with ${
-                        selectedPeer.fullName || selectedPeer._id
-                      }`,
-                    ]);
-                    setSelectedThread(thread);
-                    await loadThreads();
-                    await loadMessages(thread._id);
-                  } catch (err: any) {
-                    setLog((l) => [
-                      ...l.slice(-80),
-                      `direct error: ${err?.message ?? err}`,
-                    ]);
-                  }
-                }}
-                style={{ marginTop: 10, width: "100%" }}
-              >
-                Create or Load Direct
-              </button>
-            )}
-          </section>
-
-          <section className="panel">
-            <div className="panel-header">
-              <span>Direct Threads</span>
-            </div>
-            <div className="list">
-              {threads
-                .filter((t) => t.type === "direct")
-                .map((t) => (
-                  <div
-                    key={t._id}
-                    className={`list-item ${
-                      selectedThread?._id === t._id ? "selected" : ""
-                    }`}
-                    onClick={async () => {
-                      setSelectedThread(t);
-                      await loadMessages(t._id);
-                    }}
-                  >
-                    <div className="list-title">
-                      {t.directPeer?.fullName ||
-                        t.directPeer?.email ||
-                        `DM ${t._id.slice(-6)}`}
-                    </div>
-                    <div className="list-subtitle">
-                      {t.lastMessage?.text || "No messages yet"}
-                    </div>
-                  </div>
-                ))}
-              {!threads.some((t) => t.type === "direct") && (
-                <div className="list-item muted">
-                  No direct threads. Create one then reload.
-                </div>
-              )}
-            </div>
-          </section>
-
-          <section className="panel">
-            <div className="panel-header">
-              <span>Group Threads</span>
-            </div>
-            <div className="list">
-              {threads
-                .filter((t) => t.type === "group")
-                .map((t) => (
-                  <div
-                    key={t._id}
-                    className={`list-item ${
-                      selectedThread?._id === t._id ? "selected" : ""
-                    }`}
-                    onClick={async () => {
-                      setSelectedThread(t);
-                      await loadMessages(t._id);
-                    }}
-                  >
-                    <div className="list-title">{t.name || `Group ${t._id}`}</div>
-                    <div className="list-subtitle">
-                      {t.lastMessage?.text || "No messages yet"}
-                    </div>
-                  </div>
-                ))}
-              {!threads.some((t) => t.type === "group") && (
-                <div className="list-item muted">No groups loaded.</div>
-              )}
-            </div>
-          </section>
-        </aside>
-
-        <main className="main">
-          <section className="panel chat-panel">
-            {selectedThread ? (
-              <>
-                <div className="chat-header">
-                  <div>
-                    <div className="chat-title">{selectedTitle}</div>
-                    <div className="chat-subtitle">
-                      {selectedThread.type === "direct"
-                        ? "Direct conversation"
-                        : `Group members: ${selectedThread.memberUserIds?.length ?? 0}`}
-                    </div>
-                  </div>
-                  <div className="panel-note">{selectedThread._id}</div>
-                </div>
-
-                <div className="chat-scroll">
-                  {messages.map((m) => {
-                    const isOwn =
-                      m.senderUserId === "me" ||
-                      (viewerUserId && m.senderUserId === viewerUserId);
-                    const displayName = getDisplayName(m.senderUserId);
-                    const initials = getInitials(displayName);
-                    return (
-                      <div
-                        key={m._id}
-                        className={`message-row ${isOwn ? "me" : ""}`}
-                      >
-                        {!isOwn && <div className="avatar">{initials}</div>}
-                        <div className="message-block">
-                          <div
-                            className={`message-meta ${isOwn ? "me" : ""}`}
-                          >
-                            {displayName} - {formatTime(m.createdAt)}
-                          </div>
-                          <div className={`bubble ${isOwn ? "me" : ""}`}>
-                            <div className="message-text">
-                              {m.text || "[media]"}
-                            </div>
-                            {m.imageUrl && (
-                              <img
-                                className="message-media"
-                                src={m.imageUrl}
-                                alt="attachment"
-                                loading="lazy"
-                              />
-                            )}
-                          </div>
-                        </div>
-                        {isOwn && <div className="avatar me">{initials}</div>}
-                      </div>
-                    );
-                  })}
-                  {messagesError && (
-                    <div className="panel-note">Error: {messagesError}</div>
-                  )}
-                  {!messages.length && !messagesError && (
-                    <div className="empty-state">No history yet.</div>
-                  )}
-                </div>
-
-                <div className="input-row">
-                  <textarea
-                    className="textarea"
-                    value={text}
-                    onChange={(e) => setText(e.target.value)}
-                    placeholder="Type a message"
-                  />
-                  <button className="btn" onClick={sendMessage}>
-                    Send
-                  </button>
-                </div>
-              </>
-            ) : (
-              <div className="empty-state">
-                Select a thread to open the conversation.
-              </div>
-            )}
-          </section>
-        </main>
-
-        <aside className="side-right">
-          <section className="panel">
-            <div className="panel-header">
-              <span>Create Group</span>
-            </div>
-            {viewerRole === "golf_club" && (
-              <div className="panel-note" style={{ marginBottom: 10 }}>
-                Club groups auto-add all club members.
-              </div>
-            )}
-            <input
-              className="input"
-              placeholder="Group name"
-              value={groupName}
-              onChange={(e) => setGroupName(e.target.value)}
-            />
-            {viewerRole !== "golf_club" && (
-              <div className="list checkbox-list" style={{ marginTop: 10 }}>
-                {following.map((f) => (
-                  <label key={f.golfer._id}>
-                    <input
-                      type="checkbox"
-                      checked={groupMembers.has(f.golfer._id)}
-                      onChange={() => toggleMember(f.golfer._id)}
-                    />
-                    {f.golfer.fullName || f.golfer.email || f.golfer._id}
-                  </label>
-                ))}
-                {!following.length && (
-                  <div className="list-item muted">
-                    Load following to pick members.
-                  </div>
-                )}
-              </div>
-            )}
-            <button className="btn" onClick={createGroup} style={{ marginTop: 10 }}>
-              Create Group
-            </button>
-          </section>
-
-          <section className="panel">
-            <div className="panel-header">
-              <span>Log</span>
-            </div>
-            <div className="log-list">
-              {log.map((l, i) => (
-                <div key={i} className="log-item">
-                  {l}
+          )}
+          <div style={{ marginTop: 10 }}>
+            <strong>Threads</strong>
+            <div className="list" style={{ marginTop: 6 }}>
+              {threads.map((t) => (
+                <div
+                  key={t._id}
+                  className={`item ${selectedThread?._id === t._id ? "sel" : ""}`}
+                  onClick={() => void openThread(t)}
+                >
+                  <div>{t.type === "direct" ? t.directPeer?.fullName || t.directPeer?.email || "Direct" : t.name || "Group"}</div>
+                  <div className="muted">{t.lastMessage?.text || (t.lastMessage?.imageUrl ? "[image]" : "No messages")}</div>
                 </div>
               ))}
             </div>
-          </section>
-        </aside>
+          </div>
+        </div>
+
+        <div className="card chat">
+          <div className="row">
+            <strong>{threadTitle}</strong>
+            {selectedThread && <button onClick={() => void loadMessages(selectedThread._id)}>Reload</button>}
+          </div>
+          <div className="msgs">
+            {messages.map((m) => {
+              const mine = viewerUserId && m.senderUserId === viewerUserId;
+              const loved = Boolean(viewerUserId && m.reactions.some((r) => r.userId === viewerUserId));
+              return (
+                <div className="msg" key={m._id}>
+                  <div className="meta">{display(m.senderUserId)} - {fmtTime(m.createdAt)}</div>
+                  <div className="txt">{m.text || (m.imageUrl ? "[image]" : "")}</div>
+                  {m.imageUrl && <img src={m.imageUrl} alt="attachment" style={{ maxWidth: 220, borderRadius: 8, marginTop: 6 }} />}
+                  <div className="rx">
+                    <button
+                      className={`rxbtn ${loved ? "active" : ""}`}
+                      disabled={busyReactionId === m._id || m._id.startsWith("tmp-")}
+                      onClick={() => void reactToMessage(m._id)}
+                    >
+                      {loved ? "Loved" : "Love"}
+                    </button>
+                    <span className="muted">love x{m.reactions.length}</span>
+                    {mine && <span className="muted">(you)</span>}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+          {selectedThread && (
+            <>
+              <textarea className="textarea" placeholder="Type message" value={text} onChange={(e) => setText(e.target.value)} />
+              <input className="input" placeholder="Optional image URL" value={mediaUrl} onChange={(e) => setMediaUrl(e.target.value)} />
+              <div className="row">
+                <button onClick={sendMessage}>Send</button>
+                <button onClick={() => { setText(""); setMediaUrl(""); }}>Clear</button>
+              </div>
+            </>
+          )}
+        </div>
+
+        <div className="card">
+          <strong>Create Group</strong>
+          <input className="input" placeholder="Group name" value={groupName} onChange={(e) => setGroupName(e.target.value)} style={{ marginTop: 8 }} />
+          {viewerRole !== "golf_club" && (
+            <div className="list" style={{ marginTop: 8 }}>
+              {following.map((f) => (
+                <label key={f.golfer._id} className="item" style={{ display: "flex", gap: 8 }}>
+                  <input
+                    type="checkbox"
+                    checked={groupMembers.has(f.golfer._id)}
+                    onChange={() =>
+                      setGroupMembers((prev) => {
+                        const next = new Set(prev);
+                        next.has(f.golfer._id) ? next.delete(f.golfer._id) : next.add(f.golfer._id);
+                        return next;
+                      })
+                    }
+                  />
+                  {f.golfer.fullName || f.golfer.email || f.golfer._id}
+                </label>
+              ))}
+            </div>
+          )}
+          <div className="row" style={{ marginTop: 8 }}>
+            <button onClick={createGroup}>Create Group</button>
+          </div>
+          <div style={{ marginTop: 12 }}>
+            <strong>Log</strong>
+            <div className="log">
+              {log.map((line, i) => (
+                <div key={`${i}-${line}`} className="muted">{line}</div>
+              ))}
+            </div>
+          </div>
+        </div>
       </div>
     </div>
   );

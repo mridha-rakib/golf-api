@@ -144,7 +144,11 @@ export class ChatMessageRepository extends BaseRepository<IChatMessage> {
 
   async upsertReaction(
     messageId: string,
-    payload: { userId: import("mongoose").Types.ObjectId; emoji: string; reactedAt?: Date },
+    payload: {
+      userId: import("mongoose").Types.ObjectId;
+      emoji: "love";
+      reactedAt?: Date;
+    },
   ): Promise<IChatMessage | null> {
     const reactedAt = payload.reactedAt ?? new Date();
     return this.model

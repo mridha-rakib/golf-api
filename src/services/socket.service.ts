@@ -161,10 +161,9 @@ export class SocketService {
         (payload: ReactMessagePayload, cb?: (resp: any) => void) => {
           try {
             const messageId = payload?.messageId?.trim();
-            const emoji = payload?.emoji?.trim() ?? "";
+            const emoji = payload?.emoji?.trim();
 
             if (!messageId) throw new Error("messageId is required");
-            if (!emoji) throw new Error("emoji is required");
 
             this.chatService
               .reactToMessage(socket.userId!, messageId, emoji)

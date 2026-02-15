@@ -38,6 +38,15 @@ export type GolfClubResponse = {
   updatedAt: Date;
 };
 
+export type MyClubListItem = GolfClubResponse & {
+  isSelfProfile: boolean;
+  chatMode: "direct" | "group";
+};
+
+export type MyClubsResponse = {
+  clubs: MyClubListItem[];
+};
+
 export type GolfClubMemberResponse = {
   _id: string;
   clubId: string;

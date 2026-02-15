@@ -19,6 +19,7 @@ import {
 import { GolfClubService } from "./golf-club.service";
 import { logger } from "@/middlewares/pino-logger";
 import { UserService } from "@/modules/user/user.service";
+import type { MyClubListItem, MyClubsResponse } from "./golf-club.type";
 
 export class GolfClubController {
   private golfClubService: GolfClubService;
@@ -67,7 +68,7 @@ export class GolfClubController {
 
     // For the chat UI header, the client can render a single list of "club-like"
     // items by using this synthetic entry for the logged-in golfer.
-    const meAsClub = {
+    const meAsClub: MyClubListItem = {
       _id: profile._id,
       name: profile.userName || profile.fullName,
       clubUserId: profile._id,
@@ -80,13 +81,23 @@ export class GolfClubController {
       address: profile.address ?? "",
       ghinNumber: "",
       memberCount: 0,
+      isSelfProfile: true,
+      chatMode: "direct",
       createdAt: profile.createdAt,
       updatedAt: profile.updatedAt,
     };
 
-    const clubs = [meAsClub, ...clubsOnly];
+    const clubs: MyClubListItem[] = [
+      meAsClub,
+      ...clubsOnly.map((club) => ({
+        ...club,
+        isSelfProfile: false,
+        chatMode: "group" as const,
+      })),
+    ];
 
-    ApiResponse.success(res, { clubs }, "Your clubs fetched successfully");
+    const payload: MyClubsResponse = { clubs };
+    ApiResponse.success(res, payload, "Your clubs fetched successfully");
   });
 
   getClubRoles = asyncHandler(async (req: Request, res: Response) => {
