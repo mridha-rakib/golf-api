@@ -1,10 +1,12 @@
 import { ROLES } from "@/constants/app.constants";
+import { logger } from "@/middlewares/pino-logger";
 import { CLUB_ROLES } from "@/modules/golf-club/golf-club-role.model";
 import {
   GolfClubMemberRepository,
   GolfClubRepository,
   GolfClubRoleRepository,
 } from "@/modules/golf-club/golf-club.repository";
+import { NotificationService } from "@/modules/notification/notification.service";
 import {
   BadRequestException,
   ForbiddenException,
@@ -32,6 +34,7 @@ export class ChatService {
   private messageRepo: ChatMessageRepository;
   private followRepo: SocialFollowRepository;
   private userService: UserService;
+  private notificationService: NotificationService;
   private golfClubRepository: GolfClubRepository;
   private golfClubRoleRepository: GolfClubRoleRepository;
   private golfClubMemberRepository: GolfClubMemberRepository;
@@ -42,6 +45,7 @@ export class ChatService {
     this.messageRepo = new ChatMessageRepository();
     this.followRepo = new SocialFollowRepository();
     this.userService = new UserService();
+    this.notificationService = new NotificationService();
     this.golfClubRepository = new GolfClubRepository();
     this.golfClubRoleRepository = new GolfClubRoleRepository();
     this.golfClubMemberRepository = new GolfClubMemberRepository();
@@ -254,6 +258,35 @@ export class ChatService {
     return threadId;
   }
 
+  private async notifyDirectMessageRecipient(payload: {
+    senderUserId: string;
+    recipientUserId: string;
+    threadId: string;
+    message: IChatMessage;
+  }): Promise<void> {
+    try {
+      await this.notificationService.notifyChatMessage({
+        senderUserId: payload.senderUserId,
+        recipientUserId: payload.recipientUserId,
+        threadId: payload.threadId,
+        messageId: (payload.message._id as any).toString(),
+        messageType: payload.message.type,
+        text: payload.message.text ?? null,
+        imageUrl: payload.message.imageUrl ?? null,
+      });
+    } catch (error) {
+      logger.warn(
+        {
+          error,
+          senderUserId: payload.senderUserId,
+          recipientUserId: payload.recipientUserId,
+          threadId: payload.threadId,
+        },
+        "Failed to create direct chat notification",
+      );
+    }
+  }
+
   async addMembersToClubGroupThreads(
     clubId: string,
     memberUserIds: string[],
@@ -325,7 +358,14 @@ export class ChatService {
       imageUrl: payload.imageUrl,
       mentionedUserIds,
     } as any);
-    await this.threadRepo.touch((thread._id as any).toString());
+    const threadId = (thread._id as any).toString();
+    await this.threadRepo.touch(threadId);
+    await this.notifyDirectMessageRecipient({
+      senderUserId,
+      recipientUserId: payload.toGolferUserId,
+      threadId,
+      message,
+    });
 
     const fullThread = await this.toThreadSummary(
       thread,
@@ -414,14 +454,15 @@ export class ChatService {
       throw new ForbiddenException("You are not a member of this thread.");
     }
 
+    let directPeerId: string | null = null;
     if (thread.type === "direct") {
-      const peerId =
+      directPeerId =
         thread.memberUserIds.map(String).find((id) => id !== senderUserId) ??
         null;
-      if (!peerId) {
+      if (!directPeerId) {
         throw new BadRequestException("Direct thread is missing a peer.");
       }
-      await this.assertCanDm(senderUserId, peerId);
+      await this.assertCanDm(senderUserId, directPeerId);
     }
 
     this.validateMessagePayload(payload.type, payload.text, payload.imageUrl);
@@ -440,7 +481,17 @@ export class ChatService {
       imageUrl: payload.imageUrl,
       mentionedUserIds,
     } as any);
-    await this.threadRepo.touch((thread._id as any).toString());
+    const threadId = (thread._id as any).toString();
+    await this.threadRepo.touch(threadId);
+
+    if (thread.type === "direct" && directPeerId) {
+      await this.notifyDirectMessageRecipient({
+        senderUserId,
+        recipientUserId: directPeerId,
+        threadId,
+        message,
+      });
+    }
 
     const fullThread = await this.toThreadSummary(
       thread,

@@ -19,6 +19,7 @@ const notificationSchema = BaseSchemaUtil.createSchema<INotification>({
     type: String,
     enum: [
       "FOLLOW",
+      "CHAT_MESSAGE",
       "CLUB_MEMBER_ASSIGNED",
       "CLUB_MANAGER_ASSIGNED",
       "NEW_USER_REGISTERED",

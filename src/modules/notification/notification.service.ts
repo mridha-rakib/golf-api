@@ -87,6 +87,48 @@ export class NotificationService {
     ]);
   }
 
+  async notifyChatMessage(payload: {
+    senderUserId: string;
+    recipientUserId: string;
+    threadId: string;
+    messageId: string;
+    messageType: "text" | "image";
+    text?: string | null;
+    imageUrl?: string | null;
+  }): Promise<void> {
+    if (payload.senderUserId === payload.recipientUserId) return;
+
+    const actor = await this.userService.getProfile(payload.senderUserId);
+    const actorName = actor.fullName || actor.email;
+    const normalizedText = (payload.text ?? "").trim();
+    const textPreview =
+      normalizedText.length > 0
+        ? normalizedText.slice(0, 120)
+        : null;
+    const suffix = normalizedText.length > 120 ? "..." : "";
+
+    const message =
+      payload.messageType === "image"
+        ? `${actorName} sent you an image.`
+        : textPreview
+          ? `${actorName} sent you a message: "${textPreview}${suffix}"`
+          : `${actorName} sent you a message.`;
+
+    await this.createNotification({
+      recipientUserId: payload.recipientUserId,
+      actorUserId: payload.senderUserId,
+      type: "CHAT_MESSAGE",
+      message,
+      metadata: {
+        threadId: payload.threadId,
+        messageId: payload.messageId,
+        messageType: payload.messageType,
+        textPreview,
+        imageUrl: payload.imageUrl ?? null,
+      },
+    });
+  }
+
   async notifyClubAssignment(payload: {
     recipientUserId: string;
     clubId: string;

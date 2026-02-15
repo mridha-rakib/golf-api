@@ -2,6 +2,7 @@ import type { Document, Types } from "mongoose";
 
 export type NotificationType =
   | "FOLLOW"
+  | "CHAT_MESSAGE"
   | "CLUB_MEMBER_ASSIGNED"
   | "CLUB_MANAGER_ASSIGNED"
   | "NEW_USER_REGISTERED"
