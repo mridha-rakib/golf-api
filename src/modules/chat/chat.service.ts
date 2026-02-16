@@ -648,15 +648,13 @@ export class ChatService {
       throw new NotFoundException("User not found.");
     }
 
-    let clubContext: { clubName: string; clubUserId: string } | null = null;
-
     if (viewer.role === ROLES.GOLF_CLUB) {
       const club = await this.golfClubRepository.findById(clubId);
       if (!club || club.clubUserId.toString() !== viewerUserId) {
         throw new ForbiddenException("You do not have access to this club.");
       }
     } else if (viewer.role === ROLES.GOLFER) {
-      clubContext = await this.assertGolferInClub(clubId, viewerUserId);
+      await this.assertGolferInClub(clubId, viewerUserId);
     } else {
       throw new ForbiddenException("You do not have access to this club.");
     }
@@ -671,38 +669,8 @@ export class ChatService {
       ),
     );
 
-    // For clubs, this route returns only club group chats.
-    if (viewer.role !== ROLES.GOLFER) {
-      return groupSummaries;
-    }
-
-    // For golfers, also include 1:1 threads with other golfers in this club only.
-    const { memberUserIds: clubMemberUserIds } = await this.resolveClubMembers(
-      clubContext!.clubUserId,
-    );
-    const clubMemberSet = new Set(
-      clubMemberUserIds.filter((id) => id !== viewerUserId),
-    );
-
-    const directThreads = await this.threadRepo.findThreadsForUserByType(
-      viewerUserId,
-      "direct",
-    );
-    const directForClub = directThreads.filter((thread) => {
-      const members = (thread.memberUserIds ?? []).map(String);
-      const peerId = members.find((id) => id !== viewerUserId) ?? null;
-      return Boolean(peerId && clubMemberSet.has(peerId));
-    });
-
-    const directSummaries = await Promise.all(
-      directForClub.map((thread) =>
-        this.toThreadSummary(thread, null, viewerUserId),
-      ),
-    );
-
-    return [...groupSummaries, ...directSummaries].sort(
-      (a, b) => b.updatedAt.getTime() - a.updatedAt.getTime(),
-    );
+    // Club route intentionally returns only club group threads.
+    return groupSummaries;
   }
 
   async addGroupMembers(

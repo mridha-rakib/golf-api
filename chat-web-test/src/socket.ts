@@ -1,9 +1,12 @@
 import { io, Socket } from "socket.io-client";
 
+const DEFAULT_API_BASE = "http://localhost:3000/api/v1";
+
 const buildSocketUrl = () => {
   const raw =
     (import.meta as any).env.VITE_SOCKET_BASE ||
-    (import.meta as any).env.VITE_API_BASE;
+    (import.meta as any).env.VITE_API_BASE ||
+    DEFAULT_API_BASE;
 
   try {
     const parsed = new URL(raw);
