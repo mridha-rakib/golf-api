@@ -1,7 +1,10 @@
 import axios from "axios";
 
+const API_BASE =
+  import.meta.env.VITE_API_BASE?.trim() || "http://localhost:3000/api/v1";
+
 export const api = axios.create({
-  baseURL: import.meta.env.VITE_API_BASE,
+  baseURL: API_BASE,
 });
 
 export const normalizeToken = (token: string) =>
