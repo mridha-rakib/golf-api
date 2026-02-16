@@ -98,6 +98,28 @@ function handleMongoDBError(error: any, requestId?: string) {
   return null;
 }
 
+function handleAwsStorageError(error: any, requestId?: string) {
+  const awsCredentialErrors = new Set([
+    "InvalidAccessKeyId",
+    "SignatureDoesNotMatch",
+    "ExpiredToken",
+    "UnrecognizedClientException",
+    "InvalidClientTokenId",
+  ]);
+
+  if (awsCredentialErrors.has(error?.name)) {
+    return {
+      statusCode: HTTPSTATUS.SERVICE_UNAVAILABLE,
+      message:
+        "File storage authentication failed. Check AWS credentials and try again.",
+      errorCode: ErrorCodeEnum.FILE_STORAGE_AUTH_ERROR,
+      requestId,
+    };
+  }
+
+  return null;
+}
+
 export const errorHandler: ErrorRequestHandler = (
   error,
   req: Request,
@@ -147,6 +169,17 @@ export const errorHandler: ErrorRequestHandler = (
       errors: mongoError.errors,
       errorCode: mongoError.errorCode,
       requestId: mongoError.requestId,
+      timestamp: new Date().toISOString(),
+    });
+  }
+
+  const awsStorageError = handleAwsStorageError(error, String(requestId));
+  if (awsStorageError) {
+    return res.status(awsStorageError.statusCode).json({
+      success: false,
+      message: awsStorageError.message,
+      errorCode: awsStorageError.errorCode,
+      requestId: awsStorageError.requestId,
       timestamp: new Date().toISOString(),
     });
   }
